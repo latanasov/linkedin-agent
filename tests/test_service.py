@@ -244,3 +244,13 @@ async def test_report_tasks_and_log(svc, deps, executor):
     with pytest.raises(ServiceError, match="unknown task status"):
         await svc.tasks("bogus")
     assert (await svc.log())[0]["action"] == "visit"
+
+
+def test_run_state_reports_fast_test_of_the_loop_that_is_up(settings, clock):
+    """A loop can be started with a different env than the process asking, so the answer
+    has to come from the heartbeat, not from these settings."""
+    write_heartbeat(settings, "default", clock.now)
+    assert run_state(settings)["fast_test"] is False
+    settings.fast_test = True
+    write_heartbeat(settings, "default", clock.now)
+    assert run_state(settings)["fast_test"] is True
