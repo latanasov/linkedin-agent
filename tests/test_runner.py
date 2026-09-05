@@ -860,3 +860,30 @@ async def test_rate_limited_sequence_task_is_parked_inside_its_window(deps, exec
     expected_open, expected_close = schedule_in_window("send", next_local_day(NOW, "UTC"), UTC)
     assert parked.not_before == expected_open and parked.not_after == expected_close
     assert executor.calls == []
+
+
+# ── statuses the model invents ────────────────────────────────────────────
+
+
+async def test_invented_success_status_counts_as_the_success_it_names(deps, executor):
+    """Seen live: like_post returned "liked_but_url_not_found". The like happened; the
+    sequence must move on rather than stall with the task marked done."""
+    lead, _ = await seed(deps, step="warm.like", branch="posts")
+    executor.script(Action.LIKE_POST, {"status": "liked_but_url_not_found"})
+    t = await enqueue_step(deps, lead, "warm.like", post_url="", post_text=lead.posts[0].text)
+    out = await process_task(t, deps)
+    assert out.status == TaskStatus.DONE and out.result.status == "liked"
+    assert out.result.data["reported_status"] == "liked_but_url_not_found"
+    seq = await deps.leads.get_sequence(lead.id)
+    assert seq.step_id == "warm.comment" and seq.next_due_at is not None
+
+
+async def test_unknown_status_is_retried_not_silently_stalled(deps, executor):
+    lead, _ = await seed(deps, step="warm.follow")
+    executor.script(Action.FOLLOW, {"status": "clicked_something"})
+    t = await enqueue_step(deps, lead, "warm.follow")
+    out = await process_task(t, deps)
+    assert out.status == TaskStatus.QUEUED and "retry 1/3" in out.note
+    assert "unknown status 'clicked_something'" in out.result.error
+    seq = await deps.leads.get_sequence(lead.id)
+    assert seq.step_id == "warm.follow", "still on the step, and the task is queued again"

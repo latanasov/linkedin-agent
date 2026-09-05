@@ -40,6 +40,51 @@ SOFT_SKIP_STATUSES: dict[Action, frozenset[str]] = {
     Action.CHECK_REPLIES: frozenset({"no_thread"}),
 }
 
+# Statuses an action's prompt may legitimately return that are neither success, skip nor
+# cannot-contact; a campaign routes them with on_result, and one it does not route stalls
+# the lead on purpose (documented in the campaign skill).
+_OTHER_KNOWN: dict[Action, frozenset[str]] = {
+    Action.CHECK_CONNECTION: frozenset({"no_option"}),
+}
+
+
+def known_statuses(action: Action) -> frozenset[str]:
+    return (
+        SUCCESS_STATUSES.get(action, frozenset())
+        | SOFT_SKIP_STATUSES.get(action, frozenset())
+        | CANNOT_CONTACT_STATUSES.get(action, frozenset())
+        | _OTHER_KNOWN.get(action, frozenset())
+    )
+
+
+def normalize_status(action: Action, result: TaskResult) -> TaskResult:
+    """Make an invented status routable.
+
+    Every prompt names the exact statuses it may return, and models still improvise:
+    "liked_but_url_not_found", "sent_without_note". A status no table knows routes
+    nowhere, and a sequence that routes nowhere stalls with the task marked done — the
+    one outcome worse than a failure, because nothing shows it.
+
+    A status that begins with a known one is that status (the suffix is commentary, kept
+    in data["reported_status"]). Anything else becomes a plain failure, so it is retried:
+    every action has an idempotency probe, so a retry of something that in fact happened
+    comes back as already_liked / already_pending / already_sent."""
+    known = known_statuses(action)
+    status = (result.status or "").strip()
+    if not status or status in known:
+        return result
+    for candidate in sorted(known, key=len, reverse=True):
+        if status.startswith(candidate) and status[len(candidate) : len(candidate) + 1] in "_- ":
+            data = {**result.data, "reported_status": status}
+            return result.model_copy(update={"status": candidate, "data": data})
+    return TaskResult(
+        status="failed",
+        error=f"unknown status {status!r} from the model"
+        + (f": {result.error}" if result.error else ""),
+        data={**result.data, "reported_status": status},
+    )
+
+
 _STAGE_RANK = {
     LeadStage.NEW: 0,
     LeadStage.WARMING: 1,

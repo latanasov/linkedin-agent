@@ -4,6 +4,7 @@ from linkedin_agent.core.status_map import (
     is_soft_skip,
     is_success,
     normalize_reply_check,
+    normalize_status,
 )
 from linkedin_agent.models import Action, LeadStage, PostRef, TaskResult
 from tests.conftest import NOW, make_lead
@@ -243,3 +244,34 @@ def test_like_result_with_bogus_post_url_marks_the_newest_post():
         NOW,
     )
     assert commented.posts[1].commented is True and commented.posts[0].commented is False
+
+
+def test_normalize_status_snaps_a_commented_status_to_the_known_one():
+    r = normalize_status(Action.LIKE_POST, TaskResult(status="liked_but_url_not_found"))
+    assert r.status == "liked" and r.data["reported_status"] == "liked_but_url_not_found"
+    r = normalize_status(Action.CONNECT, TaskResult(status="sent_without_note", data={"k": 1}))
+    assert r.status == "sent" and r.data == {"k": 1, "reported_status": "sent_without_note"}
+    # the longest known prefix wins: already_liked, not liked
+    r = normalize_status(Action.LIKE_POST, TaskResult(status="already_liked_earlier"))
+    assert r.status == "already_liked"
+
+
+def test_normalize_status_leaves_known_statuses_alone():
+    for action, status in (
+        (Action.LIKE_POST, "liked"),
+        (Action.LIKE_POST, "post_not_found"),
+        (Action.CONNECT, "cannot_connect"),
+        (Action.CHECK_CONNECTION, "no_option"),
+        (Action.MESSAGE, "sent"),
+    ):
+        r = TaskResult(status=status, data={"x": 1})
+        assert normalize_status(action, r) is r
+
+
+def test_normalize_status_turns_gibberish_into_a_retryable_failure():
+    r = normalize_status(Action.FOLLOW, TaskResult(status="done_i_think", error="?"))
+    assert r.status == "failed"
+    assert "unknown status 'done_i_think'" in r.error and r.error.endswith(": ?")
+    assert r.data["reported_status"] == "done_i_think"
+    # "likedd" is not "liked" followed by a separator
+    assert normalize_status(Action.LIKE_POST, TaskResult(status="likedd")).status == "failed"

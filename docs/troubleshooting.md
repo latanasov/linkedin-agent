@@ -93,6 +93,13 @@ Three actions in a row failed for ordinary reasons, usually a LinkedIn layout th
 could not read. Look at `log` and the failed tasks on the dashboard. `breaker reset` when
 you have seen what failed.
 
+**`failed · other; retry 1/3` with `unknown status '…' from the model`**
+The browser model answered with a status the prompt did not offer. A status that merely
+extends a known one (`liked_but_url_not_found`) is read as that status; anything else is
+retried, and the retry finds the action already done if it was (`already_liked`,
+`already_pending`). Nothing to do unless it repeats — then run once with `-v` and share
+the step log.
+
 **`failed · other; retry 1/3`**
 One action failed and is retried in ten minutes. After three attempts the lead's step
 stalls. `retry <lead>` re-arms it, `skip <lead>` moves on without it.
