@@ -163,6 +163,29 @@ async def run_linkedin_agent(
     )
     try:
         history = await agent.run(max_steps=max_steps)
+        stopped = unfinished_run(history, max_steps)
+        if stopped is not None:
+            return stopped
         return parse_agent_result(history)
     finally:
         del agent
+
+
+def unfinished_run(history: Any, max_steps: int) -> dict[str, Any] | None:
+    """A failure that says what happened when the agent never called `done`.
+
+    Out of steps or out of retries, browser-use's final_result() is the text of the last
+    action — "Typed 'Hi Jane…'" — which then read as a formatting error. Name the real
+    cause, and carry the last step error (a timeout, say) so classification sees it."""
+    is_done = getattr(history, "is_done", None)
+    if is_done is None or is_done():
+        return None
+    steps = history.number_of_steps() if hasattr(history, "number_of_steps") else "?"
+    msg = f"agent stopped after {steps} of {max_steps} steps without a result"
+    errors = [e for e in (history.errors() or []) if e] if hasattr(history, "errors") else []
+    if errors:
+        msg += f"; last step error: {str(errors[-1])[:140]}"
+    last = str(history.final_result() or "")[:100] if hasattr(history, "final_result") else ""
+    if last:
+        msg += f"; last output: {last}"
+    return {"status": "failed", "error": msg}

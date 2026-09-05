@@ -59,6 +59,8 @@ def test_agent_and_llm_surface():
     from browser_use.agent.views import AgentHistoryList
 
     assert callable(AgentHistoryList.final_result)
+    for name in ("is_done", "number_of_steps", "errors"):  # used to explain an unfinished run
+        assert callable(getattr(AgentHistoryList, name)), name
 
 
 def test_signal_handler_surface_and_neutralisation():
