@@ -102,10 +102,28 @@ def parse_agent_result(raw: Any) -> Any:
 
 
 async def run_linkedin_agent(
-    prompt: str, browser: Any, llm: Any, *, max_steps: int = 12, max_failures: int = 2
+    prompt: str,
+    browser: Any,
+    llm: Any,
+    *,
+    max_steps: int = 12,
+    max_failures: int = 2,
+    llm_timeout_s: int | None = None,
+    step_timeout_s: int | None = None,
 ) -> Any:
-    """Create and run a browser-use Agent against an existing browser session."""
+    """Create and run a browser-use Agent against an existing browser session.
+
+    browser-use caps every model call at 60s and every step at 120s, which is fine for a
+    hosted model and far too short for a local one reading a 40k-token page. Passing the
+    timeouts through lets the Ollama path raise both; left as None, browser-use keeps its
+    own per-model defaults."""
     from browser_use import Agent
+
+    extra: dict[str, Any] = {}
+    if llm_timeout_s is not None:
+        extra["llm_timeout"] = llm_timeout_s
+    if step_timeout_s is not None:
+        extra["step_timeout"] = step_timeout_s
 
     agent: Any = Agent(
         task=prompt,
@@ -114,6 +132,7 @@ async def run_linkedin_agent(
         max_actions_per_step=5,
         max_failures=max_failures,
         use_judge=False,
+        **extra,
     )
     try:
         history = await agent.run(max_steps=max_steps)

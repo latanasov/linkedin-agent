@@ -1,3 +1,6 @@
+import sys
+import types
+
 import pytest
 
 from linkedin_agent.core.prompts import (
@@ -218,3 +221,33 @@ def test_comment_prompt_refuses_to_post_twice():
         {"text": "Nice point.", "post_url": "https://www.linkedin.com/posts/janedoe_a-123"},
     )
     assert '"status": "already_commented"' in p and "Never post the same comment twice" in p
+
+
+async def test_run_linkedin_agent_passes_timeouts_only_when_set(monkeypatch):
+    """A local model needs both browser-use caps raised; a hosted one keeps the defaults."""
+    import linkedin_agent.core.prompts as prompts
+
+    seen: dict = {}
+
+    class FakeAgent:
+        def __init__(self, **kw):
+            seen.update(kw)
+
+        async def run(self, max_steps):
+            seen["max_steps"] = max_steps
+            return '{"status": "ok"}'
+
+    module = types.ModuleType("browser_use")
+    module.Agent = FakeAgent  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "browser_use", module)
+
+    await prompts.run_linkedin_agent("t", object(), object(), max_steps=7)
+    assert "llm_timeout" not in seen and "step_timeout" not in seen
+
+    seen.clear()
+    await prompts.run_linkedin_agent(
+        "t", object(), object(), max_steps=7, llm_timeout_s=600, step_timeout_s=660
+    )
+    assert seen["llm_timeout"] == 600
+    assert seen["step_timeout"] == 660
+    assert seen["max_steps"] == 7

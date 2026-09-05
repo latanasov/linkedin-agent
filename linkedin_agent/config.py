@@ -28,6 +28,10 @@ class Settings(BaseSettings):
     llm_provider: Literal["openrouter", "ollama"] = "openrouter"
     ollama_host: str = "http://localhost:11434"
     ollama_timeout_s: int = 600  # local prompts of 40k tokens can take minutes per step
+    # Per-model-call and per-step budgets for the browser model. None means browser-use
+    # picks its own (60s and 120s), which only ever fits a hosted model.
+    browser_llm_timeout_s: int | None = None
+    browser_step_timeout_s: int | None = None
     browser_llm_model: str = "google/gemini-2.5-flash"
     text_llm_model: str = "google/gemini-2.5-flash"
     tier: Literal["free", "pro", "ultimate"] = "pro"
@@ -61,6 +65,19 @@ class Settings(BaseSettings):
     def llm_ready(self) -> bool:
         """True when the configured provider has what it needs to be called."""
         return bool(self.openrouter_api_key) if self.uses_openrouter else True
+
+    @property
+    def browser_timeouts(self) -> tuple[int | None, int | None]:
+        """(model call, whole step) budgets for the browser agent, in seconds.
+
+        Explicit settings win. Otherwise a local model gets ollama_timeout_s per call and
+        a little more per step, and a hosted one keeps browser-use's own defaults."""
+        if self.browser_llm_timeout_s is not None or self.browser_step_timeout_s is not None:
+            llm_t = self.browser_llm_timeout_s
+            return llm_t, self.browser_step_timeout_s or (llm_t + 60 if llm_t else None)
+        if self.uses_openrouter:
+            return None, None
+        return self.ollama_timeout_s, self.ollama_timeout_s + 60
 
     @property
     def database_path(self) -> Path:

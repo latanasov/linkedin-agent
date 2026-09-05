@@ -82,3 +82,23 @@ async def test_ollama_models_lists_or_none(monkeypatch):
 
     monkeypatch.setattr(httpx.AsyncClient, "get", down)
     assert await ollama_models("http://localhost:11434") is None
+
+
+def test_browser_timeouts_default_by_provider():
+    """browser-use's own 60s/120s caps are fine for a hosted model and far too short for
+    a local one, so the Ollama path raises both."""
+    assert _settings().browser_timeouts == (None, None)
+    assert _settings(llm_provider="ollama").browser_timeouts == (600, 660)
+    assert _settings(llm_provider="ollama", ollama_timeout_s=300).browser_timeouts == (300, 360)
+
+
+def test_browser_timeouts_can_be_set_explicitly():
+    assert _settings(browser_llm_timeout_s=90).browser_timeouts == (90, 150)
+    assert _settings(browser_llm_timeout_s=90, browser_step_timeout_s=400).browser_timeouts == (
+        90,
+        400,
+    )
+    assert _settings(llm_provider="ollama", browser_step_timeout_s=900).browser_timeouts == (
+        None,
+        900,
+    )

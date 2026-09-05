@@ -23,12 +23,21 @@ MAX_STEPS: dict[Action, int] = {
 
 
 class BrowserUseExecutor:
-    def __init__(self, llm: Any) -> None:
+    def __init__(
+        self, llm: Any, *, llm_timeout_s: int | None = None, step_timeout_s: int | None = None
+    ) -> None:
         self._llm = llm
+        self._llm_timeout_s = llm_timeout_s
+        self._step_timeout_s = step_timeout_s
 
     async def execute(self, task: Task, browser: Any) -> TaskResult:
         prompt = build_prompt(task.action, task.profile_url, task.params)
         raw = await run_linkedin_agent(
-            prompt, browser, self._llm, max_steps=MAX_STEPS.get(task.action, 10)
+            prompt,
+            browser,
+            self._llm,
+            max_steps=MAX_STEPS.get(task.action, 10),
+            llm_timeout_s=self._llm_timeout_s,
+            step_timeout_s=self._step_timeout_s,
         )
         return TaskResult.from_raw(raw)

@@ -151,6 +151,7 @@ first four.
 | `BROWSER_LLM_MODEL` | `google/gemini-2.5-flash` | The model that reads pages and clicks. An OpenRouter id, or an Ollama tag when the provider is `ollama`. |
 | `TEXT_LLM_MODEL` | `google/gemini-2.5-flash` | Writes hooks and comments. |
 | `OLLAMA_HOST` / `OLLAMA_TIMEOUT_S` | `http://localhost:11434` / `600` | Where Ollama listens and how long one call may take. |
+| `BROWSER_LLM_TIMEOUT_S` / `BROWSER_STEP_TIMEOUT_S` | provider default | Budget for one browser-model call and one whole step. Local models get `OLLAMA_TIMEOUT_S`; hosted ones keep browser-use's 60s / 120s. |
 | `HEADLESS` | `false` | Hide the browser window. |
 | `DAILY_VISIT_LIMIT` `DAILY_CONNECT_LIMIT` `DAILY_MESSAGE_LIMIT` | cap | Lower a cap for this account. |
 | `MIN_DELAY_S` / `MAX_DELAY_S` | `45` / `180` | Pause between actions. |

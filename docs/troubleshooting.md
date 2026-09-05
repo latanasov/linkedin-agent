@@ -109,6 +109,14 @@ The browser window was closed, usually by hand. The agent relaunches it. Run wit
 **`Page readiness timeout` and other lines from browser_use**
 Noise from the browser library about a blank tab. Harmless. They only show with `-v`.
 
+**`LLM call timed out after 60 seconds` on every step, with a local model**
+The browser model cannot answer a 40,000-token page inside the browser library's budget.
+The agent now hands local models `LINKEDIN_AGENT_OLLAMA_TIMEOUT_S` (600 by default) for
+both the call and the step, so on the current version this means the model itself is too
+slow: a step that needs ten minutes is not usable either. Try a smaller,
+non-reasoning model, or keep the browser on OpenRouter. See
+[Local models](local-models.md).
+
 **`send_button_not_found`**
 The model could not find LinkedIn's Send button. It is retried; the retry checks the
 thread first so nothing is sent twice. If it happens repeatedly, run once with
