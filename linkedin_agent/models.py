@@ -134,6 +134,19 @@ class PostRef(BaseModel):
     liked: bool = False
     commented: bool = False
 
+    @field_validator("url", mode="before")
+    @classmethod
+    def _only_real_post_urls(cls, v: Any) -> str:
+        """A URL that is not a LinkedIn post link becomes "", wherever the row came from.
+
+        Early visits stored the profile URL as a post URL; a like or comment built on that
+        can never succeed. With no URL the prompts fall back to the person's activity
+        feed, which does work — so blanking beats dropping the post."""
+        from .core.prompts import LINKEDIN_POST_URL_RE
+
+        url = str(v or "").strip()
+        return url if LINKEDIN_POST_URL_RE.match(url) else ""
+
     def posted_on(self, seen_at: datetime) -> date | None:
         if self.posted_days_ago is None:
             return None

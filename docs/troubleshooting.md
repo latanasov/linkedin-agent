@@ -170,6 +170,12 @@ The person has no post in the last 30 days, so they went down the quiet branch. 
 with `sqlite3 ~/.linkedin-agent/agent.db "SELECT posts FROM leads"`. If they do have
 recent posts and `posts` is `[]`, the visit missed them; run `visit <url>` again.
 
+**`skipped: invalid task parameters: Invalid LinkedIn post URL: got 'https://www.linkedin.com/in/…'`**
+A visit from an early version stored the profile URL as a post URL. Current versions blank
+such a URL when the lead is loaded and like or comment the newest post from the activity
+feed instead, so this line should no longer appear. If a lead already skipped past its
+like because of it, put it back: `linkedin-agent restart <lead> --step warm.like`.
+
 ## Dashboard
 
 **`linkedin-agent ui` prints an address but the page is empty**
