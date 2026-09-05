@@ -141,10 +141,53 @@ Most people never change this. When you do, this is what each part means.
 | `id` | A name you reference elsewhere. Keep the `phase.name` style. |
 | `action` | See the table below. |
 | `after` | Minimum wait after the previous step: `30m`, `6h`, `2d`, `1w`. The agent adds up to 40% extra so nothing looks scheduled. |
-| `window` | When it may run, in the person's local time. `send`: Tue to Thu, 08:30 to 11:00 and 14:00 to 16:00. `engage`: weekdays 09:00 to 18:00. `any`: Mon to Sat 08:00 to 20:00. |
+| `window` | When it may run, in the person's local time. Three are built in — `send`: Tue to Thu, 08:30 to 11:00 and 14:00 to 16:00; `engage`: weekdays 09:00 to 18:00; `any`: Mon to Sat 08:00 to 20:00 — and you can define your own, below. |
 | `branch` | `posts` runs only for people who posted recently, `quiet` only for those who did not. Omit for both. |
 | `params` | Per action, see below. |
 | `on_result` | Where to go for each outcome. A step id, `"end:<stage>"`, or the same step id to repeat. |
+
+### Your own windows
+
+The three built-in windows encode what the research says about when invites and messages
+get accepted, and most campaigns should leave them alone. When your audience does not keep
+a Monday-to-Friday office week, add a `windows:` block at the top level and name it from a
+step:
+
+```yaml
+windows:
+  gulf:                                    # Sunday to Thursday
+    days: [sun, mon, tue, wed, thu]
+    hours: ["09:00-12:00", "16:00-18:00"]
+  evening:
+    days: [tue, wed, thu]
+    hours: ["18:00-21:00"]
+
+steps:
+  - {id: post.m1, action: message, after: 0d, window: gulf, params: {template: m1}}
+```
+
+- **Days** are `mon` to `sun`, or numbers 0 to 6 with Monday as 0.
+- **Hours** are `HH:MM-HH:MM` ranges in the person's local time, as many per day as you
+  want. A range must open before it closes; a window that spans midnight is two campaigns'
+  worth of trouble and is rejected.
+- **Naming a built-in redefines it for this campaign only.** `windows: {send: ...}` changes
+  what `send` means here and nowhere else.
+
+`linkedin-agent campaign show <name>` prints the resolved days and hours of every window
+the campaign uses — read it after every edit:
+
+```
+windows (in each person's local time):
+  any            Mon–Sat 08:00-20:00
+  gulf           Sun–Thu 09:00-12:00, 16:00-18:00 (this campaign)
+```
+
+`campaign check` warns when a window is defined but unused, when it redefines a built-in,
+and when it is narrower than two hours a week — a narrow window means tasks whose window
+closes before the agent reaches them are expired and rescheduled, so leads crawl.
+
+Widening `send` to the whole week is allowed and will lower your acceptance rate. The caps,
+the ramp and the per-person spacing are unaffected by any of this.
 
 ### Actions
 

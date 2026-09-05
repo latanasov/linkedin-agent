@@ -4,11 +4,15 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from linkedin_agent.core.timezone import (
+    describe_window,
     guess_timezone,
     in_window,
     next_window,
+    parse_days,
+    parse_slots,
     resolve_tz,
     schedule_in_window,
+    window_spec,
 )
 
 UTC = timezone.utc
@@ -105,3 +109,80 @@ def test_dst_transition_does_not_break_windows():
     open_at, _ = next_window("engage", now, NY)
     assert open_at == datetime(2026, 11, 2, 9, 0, tzinfo=NY).astimezone(UTC)
     assert open_at.hour == 14  # 09:00 EST = 14:00 UTC
+
+
+# ── campaign-defined windows ───────────────────────────────────────────────
+
+
+def test_parse_days_takes_names_and_numbers():
+    assert parse_days(["mon", "Tue", "SUN"]) == frozenset({0, 1, 6})
+    assert parse_days([0, "3", 6]) == frozenset({0, 3, 6})
+    for bad in (["funday"], [7], ["-1"], []):
+        with pytest.raises(ValueError):
+            parse_days(bad)
+
+
+def test_parse_slots_wants_hh_mm_ranges_that_open_before_they_close():
+    from datetime import time
+
+    assert parse_slots(["08:30-11:00", "14:00-16:00"]) == (
+        (time(8, 30), time(11, 0)),
+        (time(14, 0), time(16, 0)),
+    )
+    for bad in (["8-11"], ["18:00-09:00"], ["10:00-10:00"], ["25:00-26:00"], []):
+        with pytest.raises(ValueError):
+            parse_slots(bad)
+
+
+def test_window_spec_prefers_the_campaign_then_the_built_ins():
+    from linkedin_agent.core.timezone import WindowSpec
+
+    own = WindowSpec(parse_days(["sun"]), parse_slots(["09:00-10:00"]))
+    assert window_spec("send", {"gulf": own}) is not own, "built-in send untouched"
+    assert window_spec("gulf", {"gulf": own}) is own
+    assert window_spec("send", {"send": own}) is own, "a campaign may redefine a built-in"
+    with pytest.raises(ValueError, match="Unknown window 'nope'"):
+        window_spec("nope", {"gulf": own})
+
+
+def test_a_campaign_window_schedules_on_its_own_days():
+    """A Sunday-to-Thursday week: Saturday's next slot is Sunday, not Tuesday."""
+    from linkedin_agent.core.timezone import WindowSpec
+
+    gulf = {
+        "gulf": WindowSpec(
+            parse_days(["sun", "mon", "tue", "wed", "thu"]), parse_slots(["09:00-12:00"])
+        )
+    }
+    dubai = ZoneInfo("Asia/Dubai")
+    saturday = dt(2026, 9, 5, 10, 0)
+    open_at, close_at = schedule_in_window("gulf", saturday, dubai, gulf)
+    assert open_at == dt(2026, 9, 6, 5, 0) and close_at == dt(2026, 9, 6, 8, 0)
+    # the built-in send window from the same moment lands on Tuesday instead
+    assert schedule_in_window("send", saturday, dubai, gulf)[0] == dt(2026, 9, 8, 4, 30)
+    assert in_window("gulf", dt(2026, 9, 6, 6, 0), dubai, gulf) is True
+    assert in_window("gulf", saturday, dubai, gulf) is False
+
+
+def test_describe_window_reads_as_days_and_hours():
+    from linkedin_agent.core.timezone import WINDOWS
+
+    assert describe_window(WINDOWS["send"]) == "Tue\u2013Thu 08:30-11:00, 14:00-16:00"
+    assert describe_window(WINDOWS["engage"]) == "Mon\u2013Fri 09:00-18:00"
+    one = WindowSpecOf(["sat"], ["10:00-11:00"])
+    assert describe_window(one) == "Sat 10:00-11:00"
+    split = WindowSpecOf(["mon", "wed", "thu", "fri"], ["09:00-10:00"])
+    assert describe_window(split) == "Mon/Wed\u2013Fri 09:00-10:00"
+    # the week is a circle: a Sunday-to-Thursday week reads from Sunday
+    gulf = WindowSpecOf(["sun", "mon", "tue", "wed", "thu"], ["09:00-12:00"])
+    assert describe_window(gulf) == "Sun\u2013Thu 09:00-12:00"
+    weekend = WindowSpecOf(["sat", "sun"], ["10:00-14:00"])
+    assert describe_window(weekend) == "Sat\u2013Sun 10:00-14:00"
+    every_day = WindowSpecOf(["mon", "tue", "wed", "thu", "fri", "sat", "sun"], ["09:00-10:00"])
+    assert describe_window(every_day) == "Mon\u2013Sun 09:00-10:00"
+
+
+def WindowSpecOf(days, hours):
+    from linkedin_agent.core.timezone import WindowSpec
+
+    return WindowSpec(parse_days(days), parse_slots(hours))

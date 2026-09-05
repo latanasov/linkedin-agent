@@ -447,7 +447,34 @@ def campaign_check(
         errors.append(f"personalization.hook_fallback: unknown placeholder(s) {fb_unknown}")
     if not campaign.agent_name:
         errors.append("agent_name is required")
+    warnings.extend(_window_warnings(campaign))
     return errors, warnings
+
+
+def _window_warnings(campaign: Campaign) -> list[str]:
+    """Campaign-defined windows: unused, redefined, or too narrow to be reachable."""
+    from .timezone import BUILTIN_WINDOW_NAMES, describe_window
+
+    out: list[str] = []
+    used = {s.window for s in campaign.steps}
+    for name, win in campaign.windows.items():
+        spec = win.to_spec()
+        if name in BUILTIN_WINDOW_NAMES:
+            out.append(
+                f"windows.{name}: redefines the built-in {name} window as "
+                f"{describe_window(spec)} for this campaign"
+            )
+        elif name not in used:
+            out.append(f"windows.{name}: defined but no step uses it")
+        minutes = len(spec.weekdays) * sum(
+            (b.hour * 60 + b.minute) - (a.hour * 60 + a.minute) for a, b in spec.slots
+        )
+        if minutes < 120:
+            out.append(
+                f"windows.{name}: only {minutes} minutes a week; steps whose window "
+                "closes before they run are expired, so make it wider or expect misses"
+            )
+    return out
 
 
 def context_for_review(post: PostRef | None, lead: LeadRecord) -> dict[str, Any]:

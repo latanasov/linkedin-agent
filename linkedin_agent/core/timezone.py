@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -26,7 +28,91 @@ WINDOWS: dict[str, WindowSpec] = {
     "any": WindowSpec(frozenset({0, 1, 2, 3, 4, 5}), ((time(8, 0), time(20, 0)),)),
 }
 
+BUILTIN_WINDOW_NAMES = frozenset(WINDOWS)
+
 MAX_LOOKAHEAD_DAYS = 14
+
+DAY_NAMES: dict[str, int] = {
+    name: i
+    for i, names in enumerate(
+        (
+            ("mon", "monday"),
+            ("tue", "tuesday", "tues"),
+            ("wed", "wednesday"),
+            ("thu", "thursday", "thur", "thurs"),
+            ("fri", "friday"),
+            ("sat", "saturday"),
+            ("sun", "sunday"),
+        )
+    )
+    for name in names
+}
+
+_SLOT_RE = re.compile(r"^\s*(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})\s*$")
+
+
+def parse_days(values: Sequence[str | int]) -> frozenset[int]:
+    """Weekday numbers (Monday=0) from names like 'tue' or numbers."""
+    days: set[int] = set()
+    for v in values:
+        if isinstance(v, int) or (isinstance(v, str) and v.strip().isdigit()):
+            n = int(v)
+            if not 0 <= n <= 6:
+                raise ValueError(f"Day {v!r} out of range; use 0 (Monday) to 6 (Sunday)")
+            days.add(n)
+            continue
+        key = str(v).strip().lower()
+        if key not in DAY_NAMES:
+            raise ValueError(f"Unknown day {v!r}; use mon, tue, wed, thu, fri, sat or sun")
+        days.add(DAY_NAMES[key])
+    if not days:
+        raise ValueError("A window needs at least one day")
+    return frozenset(days)
+
+
+def parse_slots(values: Sequence[str]) -> tuple[tuple[time, time], ...]:
+    """Time ranges from strings like '08:30-11:00'. Each must open before it closes."""
+    slots: list[tuple[time, time]] = []
+    for v in values:
+        m = _SLOT_RE.match(str(v))
+        if not m:
+            raise ValueError(f"Bad hours {v!r}; use 'HH:MM-HH:MM', e.g. '08:30-11:00'")
+        h1, m1, h2, m2 = (int(g) for g in m.groups())
+        for h, mi in ((h1, m1), (h2, m2)):
+            if h > 23 or mi > 59:
+                raise ValueError(f"Bad hours {v!r}; hours are 00-23 and minutes 00-59")
+        start, end = time(h1, m1), time(h2, m2)
+        if start >= end:
+            raise ValueError(f"Window {v!r} opens at or after it closes")
+        slots.append((start, end))
+    if not slots:
+        raise ValueError("A window needs at least one time range")
+    return tuple(slots)
+
+
+def describe_window(spec: WindowSpec) -> str:
+    """'Tue\u2013Thu 08:30-11:00, 14:00-16:00', for `campaign show` and error messages.
+
+    The week is read as a circle, starting after its longest gap, so a Sunday-to-Thursday
+    working week prints as 'Sun\u2013Thu' rather than 'Mon\u2013Thu/Sun'."""
+    short = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+    days = sorted(spec.weekdays)
+    gaps = [(days[(i + 1) % len(days)] - d) % 7 for i, d in enumerate(days)]
+    # Break after the last of the widest gaps, so an unbroken week still starts at Monday.
+    start_at = (max(range(len(gaps)), key=lambda i: (gaps[i], i)) + 1) % len(days)
+    ordered = days[start_at:] + days[:start_at]
+
+    runs: list[str] = []
+    first = prev = ordered[0]
+    for d in [*ordered[1:], None]:
+        if d is not None and d == (prev + 1) % 7:
+            prev = d
+            continue
+        runs.append(short[first] if first == prev else f"{short[first]}\u2013{short[prev]}")
+        if d is not None:
+            first = prev = d
+    hours = ", ".join(f"{a:%H:%M}-{b:%H:%M}" for a, b in spec.slots)
+    return f"{'/'.join(runs)} {hours}"
 
 
 def resolve_tz(name: str | None, default: str = "UTC") -> ZoneInfo:
@@ -40,12 +126,28 @@ def resolve_tz(name: str | None, default: str = "UTC") -> ZoneInfo:
     return ZoneInfo("UTC")
 
 
-def next_window(kind: str, now: datetime, tz: ZoneInfo) -> tuple[datetime, datetime]:
+def window_spec(kind: str, windows: Mapping[str, WindowSpec] | None = None) -> WindowSpec:
+    """The spec for `kind`: a campaign's own window first, then the three built-ins."""
+    if windows and kind in windows:
+        return windows[kind]
+    try:
+        return WINDOWS[kind]
+    except KeyError:
+        known = sorted({*WINDOWS, *(windows or {})})
+        raise ValueError(f"Unknown window {kind!r}; known windows: {', '.join(known)}") from None
+
+
+def next_window(
+    kind: str,
+    now: datetime,
+    tz: ZoneInfo,
+    windows: Mapping[str, WindowSpec] | None = None,
+) -> tuple[datetime, datetime]:
     """Earliest (open, close) in UTC of the window of `kind` whose close is after `now`.
 
     If `now` is inside a window the returned open is that window's open (which is <= now).
     """
-    spec = WINDOWS[kind]
+    spec = window_spec(kind, windows)
     if now.tzinfo is None:
         now = now.replace(tzinfo=UTC)
     local_now = now.astimezone(tz)
@@ -61,14 +163,21 @@ def next_window(kind: str, now: datetime, tz: ZoneInfo) -> tuple[datetime, datet
     raise RuntimeError(f"No {kind} window within {MAX_LOOKAHEAD_DAYS} days")
 
 
-def in_window(kind: str, now: datetime, tz: ZoneInfo) -> bool:
-    open_at, close_at = next_window(kind, now, tz)
+def in_window(
+    kind: str, now: datetime, tz: ZoneInfo, windows: Mapping[str, WindowSpec] | None = None
+) -> bool:
+    open_at, close_at = next_window(kind, now, tz, windows)
     return open_at <= now < close_at
 
 
-def schedule_in_window(kind: str, earliest: datetime, tz: ZoneInfo) -> tuple[datetime, datetime]:
+def schedule_in_window(
+    kind: str,
+    earliest: datetime,
+    tz: ZoneInfo,
+    windows: Mapping[str, WindowSpec] | None = None,
+) -> tuple[datetime, datetime]:
     """(not_before, not_after) for a task that may run no earlier than `earliest`."""
-    open_at, close_at = next_window(kind, earliest, tz)
+    open_at, close_at = next_window(kind, earliest, tz, windows)
     return max(open_at, earliest), close_at
 
 

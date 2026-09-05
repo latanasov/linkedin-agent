@@ -104,7 +104,10 @@ any setting here.
 - **Per person:** at most one touch in 24 hours and two in 48 hours.
 - **Send window:** invites and messages go out Tuesday to Thursday, 08:30 to 11:00 and
   14:00 to 16:00, in the person's local time. Engagement runs weekdays 09:00 to 18:00.
-  Checks and visits run Monday to Saturday, 08:00 to 20:00.
+  Checks and visits run Monday to Saturday, 08:00 to 20:00. A campaign can define its own
+  windows for an audience that does not keep those hours — see
+  [Writing a campaign](campaigns.md#your-own-windows). Windows decide *when*, never *how
+  much*: the caps and the ramp are unchanged by any window you write.
 - **Delays:** every `after` in the campaign gets up to 40% extra so nothing looks
   scheduled.
 - **The browser restarts** every 20 tasks to keep memory flat.
