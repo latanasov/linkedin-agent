@@ -38,7 +38,7 @@ from . import messages as msg
 from . import sequence as seqeng
 from .errors import classify_error, classify_result
 from .limits import account_age_days, effective_cap, remaining
-from .status_map import apply_result, is_success, normalize_reply_check
+from .status_map import apply_result, is_success, normalize_reply_check, normalize_status
 from .tasks import build_prompt
 from .timezone import resolve_tz, schedule_in_window
 
@@ -334,6 +334,12 @@ async def process_task(task: Task, deps: Deps) -> Outcome:
             kind,
             now,
         )
+
+    # A status the tables do not know must never route nowhere. Error-shaped results are
+    # left for classify_result; anything else is snapped to a known status or made a
+    # retryable failure.
+    if classify_result(result) is None:
+        result = normalize_status(task.action, result)
 
     if task.action == Action.CONNECT and result.status == "cannot_connect":
         result = await _verify_cannot_connect(task, browser, deps, now)
