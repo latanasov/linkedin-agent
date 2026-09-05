@@ -50,3 +50,25 @@ def test_classify_result_dead_browser_is_a_crash():
     assert classify_result(TaskResult(status="failed", error="The DOM is empty")) == ErrorKind.CRASH
     # a real LinkedIn status is untouched
     assert classify_result(TaskResult(status="not_connected")) is None
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Event handler BrowserSession.on_SwitchTabEvent#3c41(SwitchTabEvent) timed out after 10s",
+        "LLM call timed out after 60 seconds. Keep your thinking and output short.",
+        "TIMEOUT ERROR - Handling took more than 10.0s for EventBus.on_SwitchTabEvent",
+    ],
+)
+def test_timeouts_are_crashes_not_linkedin_failures(text):
+    """A slow browser or a slow model is never a LinkedIn signal: retried without using
+    the task's attempts and without counting toward the breaker."""
+    assert classify_error(text) is ErrorKind.CRASH
+    assert classify_result(TaskResult(status="failed", error=text)) is ErrorKind.CRASH
+
+
+def test_bare_timeout_error_is_classified_by_its_class_name():
+    import asyncio
+
+    assert classify_error(asyncio.TimeoutError()) is ErrorKind.CRASH
+    assert classify_error(TimeoutError()) is ErrorKind.CRASH

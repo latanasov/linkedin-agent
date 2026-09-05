@@ -14,6 +14,13 @@ CRASH_INDICATORS = (
     "cdp client",
     "not connected",
     "websocket",
+    # Timeouts are the browser or the model being slow, never a LinkedIn signal:
+    # bubus "Event handler … timed out after 10s", browser-use "LLM call timed out",
+    # a bare asyncio.TimeoutError (classified by its class name).
+    "timed out",
+    "timeouterror",
+    "timeout error",
+    "took more than",
 )
 
 SESSION_EXPIRED_INDICATORS = (
@@ -47,6 +54,8 @@ RESULT_CRASH = (
     "empty page",
     "no browser",
     "blank page",
+    "timed out",
+    "timeout error",
 )
 
 

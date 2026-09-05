@@ -846,4 +846,8 @@ def _format(task: Task, outcome: Outcome) -> str:
     res = outcome.result.status if outcome.result else outcome.status.value
     who = task.params.get("lead_name") or task.lead_id or task.profile_url
     extra = f" · {outcome.note}" if outcome.note else ""
+    # Anything that did not succeed shows why, so the log answers the question without a
+    # trip to the database.
+    if outcome.status != TaskStatus.DONE and outcome.result and outcome.result.error:
+        extra += f" — {outcome.result.error[:110]}"
     return f"{task.action.value:<16} {who:<28} {res}{extra}"

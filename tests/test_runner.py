@@ -9,7 +9,7 @@ from linkedin_agent.core.runner import (
     process_task,
     run_loop,
 )
-from linkedin_agent.models import Action, GovernorState, LeadStage, Task, TaskStatus
+from linkedin_agent.models import Action, GovernorState, LeadStage, Task, TaskResult, TaskStatus
 from tests.conftest import NOW, make_lead
 
 
@@ -887,3 +887,23 @@ async def test_unknown_status_is_retried_not_silently_stalled(deps, executor):
     assert "unknown status 'clicked_something'" in out.result.error
     seq = await deps.leads.get_sequence(lead.id)
     assert seq.step_id == "warm.follow", "still on the step, and the task is queued again"
+
+
+def test_log_line_shows_why_a_task_did_not_succeed():
+    from linkedin_agent.core.runner import Outcome, _format
+
+    t = Task(
+        action=Action.CONNECT,
+        profile_url="https://www.linkedin.com/in/x/",
+        account="a",
+        params={"lead_name": "Grega Jerkic"},
+    )
+    failed = Outcome(
+        status=TaskStatus.QUEUED,
+        note="other; retry 1/3",
+        result=TaskResult(status="failed", error="Connect button not found after scrolling"),
+    )
+    line = _format(t, failed)
+    assert "failed · other; retry 1/3 — Connect button not found" in line
+    done = Outcome(status=TaskStatus.DONE, result=TaskResult(status="sent", error="ignored"))
+    assert "ignored" not in _format(t, done)
