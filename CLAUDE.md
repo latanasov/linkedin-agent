@@ -59,6 +59,10 @@ All three checks must pass before a push; CI runs the same three.
   `linkedin_agent/service.py`. The CLI, the UI and the MCP tools call those; never
   compute a metric or implement an operation in `cli.py`, the page, or a tool body.
 - The MCP server runs over stdio: nothing may print to stdout while it serves.
+- Send windows live in `core/timezone.py` `WINDOWS` (`send`, `engage`, `any`). A campaign
+  may add or override them with a `windows:` block; `Campaign.window_specs` is what the
+  scheduler passes down, and the `Campaign` validator is what rejects a step naming a
+  window nothing defines (`Window` is a plain `str`, not a Literal, for that reason).
 - `LINKEDIN_AGENT_FAST_TEST=true` drops windows, spacing and pacing for end-to-end
   tests. Caps and ramp still apply.
 - Default models are `google/gemini-2.5-flash` for both browser and text through

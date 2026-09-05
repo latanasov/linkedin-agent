@@ -78,7 +78,29 @@ class GovernorState(StrEnum):
 
 
 Branch = Literal["any", "posts", "quiet"]
-Window = Literal["engage", "send", "any"]
+# Not a Literal: "send", "engage" and "any" are built in, and a campaign may define its
+# own under `windows:`. The Campaign validator is what rejects an unknown name.
+Window = str
+
+
+class WindowDef(BaseModel):
+    """A campaign's own send window: which weekdays, and which hours on them."""
+
+    days: list[str | int]
+    hours: list[str]
+
+    @model_validator(mode="after")
+    def _validate(self) -> WindowDef:
+        from .core.timezone import parse_days, parse_slots
+
+        parse_days(self.days)
+        parse_slots(self.hours)
+        return self
+
+    def to_spec(self) -> Any:
+        from .core.timezone import WindowSpec, parse_days, parse_slots
+
+        return WindowSpec(parse_days(self.days), parse_slots(self.hours))
 
 
 def new_id() -> str:
@@ -204,12 +226,27 @@ class Campaign(BaseModel):
     quiet_threshold_days: int = 30
     withdraw_after_days: int = 21
     review_comments: bool = False
+    windows: dict[str, WindowDef] = Field(default_factory=dict)
     messages: dict[str, str] = Field(default_factory=dict)
     personalization: Personalization = Field(default_factory=Personalization)
     steps: list[SequenceStep]
 
+    @property
+    def window_specs(self) -> dict[str, Any]:
+        """This campaign's windows, by name. Empty when it uses only the built-in three."""
+        return {name: w.to_spec() for name, w in self.windows.items()}
+
     @model_validator(mode="after")
     def _validate_steps(self) -> Campaign:
+        from .core.timezone import WINDOWS
+
+        known_windows = {*WINDOWS, *self.windows}
+        for s in self.steps:
+            if s.window not in known_windows:
+                raise ValueError(
+                    f"Step {s.id}: unknown window {s.window!r}; "
+                    f"define it under `windows:` or use one of {', '.join(sorted(known_windows))}"
+                )
         ids = [s.id for s in self.steps]
         if len(ids) != len(set(ids)):
             dupes = sorted({i for i in ids if ids.count(i) > 1})

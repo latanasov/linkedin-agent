@@ -44,7 +44,7 @@ linkedin_agent/
     status_map.py      which result statuses mean success / soft skip / cannot contact;
                        stage transitions; stale-reply normalisation
     limits.py          caps, tier ceilings, ramp, spacing, governor
-    timezone.py        send/engage/any windows in the lead's local time; location → zone guess
+    timezone.py        built-in and campaign-defined windows in the lead's local time; location → zone guess
     messages.py        template rendering, hook and comment drafting and checks, campaign_check
     errors.py          classify exceptions and results: crash / session expired / restricted / other
     prompts.py         URL validation, text sanitisation, running a browser-use Agent

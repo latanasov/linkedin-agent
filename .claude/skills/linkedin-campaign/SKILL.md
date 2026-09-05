@@ -118,18 +118,51 @@ Names are free, but a few are special:
 | `id` | unique string | Referenced by `on_result`, `restart --step`, and the log. Keep the `phase.name` convention |
 | `action` | see table below | What the browser does |
 | `after` | `45s`, `30m`, `6h`, `2d`, `1w`, or bare seconds | Minimum delay after the previous step completes. The engine adds 0–40 % jitter |
-| `window` | `send`, `engage`, `any` | When the task may run, in the lead's local time. Ignored in fast-test mode |
+| `window` | `send`, `engage`, `any`, or one the campaign defines | When the task may run, in the lead's local time. Ignored in fast-test mode |
 | `branch` | `any` (default), `posts`, `quiet` | Skip the step when the lead is on the other branch |
 | `params` | per action | See table |
 | `on_result` | `{status: target}` | Explicit routing. `target` is a step id, `end:<stage>`, or the same step id to repeat |
 
 ### Windows
 
+Three are built in:
+
 | Window | Days | Hours (lead's local time) | Use for |
 |---|---|---|---|
 | `send` | Tue–Thu | 08:30–11:00 and 14:00–16:00 | connect, message, inmail |
 | `engage` | Mon–Fri | 09:00–18:00 | follow, like, comment |
 | `any` | Mon–Sat | 08:00–20:00 | visit, checks, withdraw |
+
+A campaign may define its own under a top-level `windows:` block, and a step may then
+name it. Days are `mon`–`sun` (or 0–6, Monday=0); hours are `HH:MM-HH:MM` ranges, as many
+per day as you like:
+
+```yaml
+windows:
+  gulf:                              # a Sunday-to-Thursday working week
+    days: [sun, mon, tue, wed, thu]
+    hours: ["09:00-12:00", "16:00-18:00"]
+  evening:
+    days: [tue, wed, thu]
+    hours: ["18:00-21:00"]
+
+steps:
+  - {id: post.m1, action: message, after: 0d, window: gulf, params: {template: m1}}
+```
+
+Naming a built-in redefines it **for that campaign only**; other campaigns keep the
+default. `campaign show` prints the resolved days and hours of every window a campaign
+uses, so check there after editing.
+
+The validator rejects a step naming a window that does not exist, a day name it does not
+know, hours that are not `HH:MM-HH:MM`, and a range that opens at or after it closes.
+`campaign check` warns about a window nothing uses, one that redefines a built-in, and one
+narrower than two hours a week.
+
+Suggest a custom window only when the user has a reason: a different market's working week,
+or an audience that reads LinkedIn outside office hours. The built-in `send` window encodes
+what the research says about acceptance rates — widening it to "all week, all hours" is a
+choice to send at times that perform worse, so say so rather than doing it silently.
 
 A task that misses its window by the time it is claimed is skipped as `window_missed`
 and re-created at the next window.

@@ -409,6 +409,15 @@ def campaign_show(name: str) -> None:
     for s in c.steps:
         br = "" if s.branch == "any" else f" [{s.branch}]"
         _echo(f"  {s.id:<14} {s.action.value:<16} after {s.after:<4} window {s.window}{br}")
+    from .core.timezone import WINDOWS, describe_window
+
+    specs = c.window_specs
+    used = sorted({s.window for s in c.steps})
+    _echo("windows (in each person's local time):")
+    for w in used:
+        spec = specs.get(w) or WINDOWS[w]
+        own = " (this campaign)" if w in specs else ""
+        _echo(f"  {w:<14} {describe_window(spec)}{own}")
 
 
 # ── leads ─────────────────────────────────────────────────────────────────

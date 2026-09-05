@@ -192,7 +192,9 @@ def build_task(
     """Materialise a step into a Task with not_before/not_after from its window."""
     if respect_windows:
         tz = resolve_tz(lead.timezone, campaign.default_timezone)
-        not_before, not_after = schedule_in_window(step.window, now, tz)
+        not_before, not_after = schedule_in_window(
+            step.window, now, tz, campaign.window_specs or None
+        )
     else:
         not_before, not_after = now, None
     return Task(
