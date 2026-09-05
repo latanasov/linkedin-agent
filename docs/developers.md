@@ -54,7 +54,7 @@ linkedin_agent/
     sqlite/            schema.sql, migrations, and one store per port
     browser_use_executor.py
     csv_import.py
-  campaigns/           default.yaml, inmail.yaml, cold-minimal.yaml
+  campaigns/           default.yaml, inmail.yaml, cold-minimal.yaml, three-week.yaml
   ui/                  FastAPI app + one static HTML page
 tests/                 conftest.py fakes the executor, pool and LLM; NOW is a fixed Wednesday
 docs/

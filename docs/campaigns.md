@@ -9,9 +9,34 @@ Start from a built-in and edit; do not write one from scratch:
 linkedin-agent campaign new mine                        # the research-backed default
 linkedin-agent campaign new mine --template inmail      # Sales Navigator / InMail version
 linkedin-agent campaign new mine --template cold-minimal # visit, connect, one message
+linkedin-agent campaign new mine --template three-week   # one cohort, finished in 21 days
 linkedin-agent campaign check mine                      # validate; do this after every edit
 linkedin-agent campaign show mine                       # print the steps in order
 ```
+
+## A cohort in three weeks
+
+`--template three-week` is the default playbook fitted to a deadline: everyone reaches an
+ending about 21 days after import, so you can run cohorts back to back and read the numbers
+of one before committing the next. It differs from `default` in five ways, each of which
+buys days:
+
+- Its own `invite` (Tue–Fri) and `followup` (Mon–Fri) windows, so no step waits out a
+  weekend. The invite keeps the good hours; only the day range widens.
+- A four-day warm-up, one touch a day, instead of six.
+- `repeat_every: 2d` on the acceptance check, which is also the biggest cost saving.
+- Eight days for an acceptance rather than 21.
+- Reply gaps of 3, 3 and 3 days instead of 3, 5 and 7 — the real price of the deadline,
+  and the first thing to relax if you find you have room.
+- An invite that times out is withdrawn and followed by **one InMail**, so a cohort is not
+  written off after eight days of silence. That needs Sales Navigator and InMail credits;
+  without them the step reports `cannot_message` and the lead ends as `not_accepted`
+  exactly as it would have, at the cost of one wasted action.
+
+**Size the cohort to your ramp, not to your list.** The invites you can send in three weeks
+are the daily connect cap times four invite days, summed over the ramp — about 75 on a new
+account, about 180 once it is settled. Import no more than two thirds of that; the last
+week needs room for messages, not only invites. Sixty is a sensible first cohort.
 
 ## The top block: who you are
 

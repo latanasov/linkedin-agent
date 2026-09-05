@@ -1,0 +1,139 @@
+# Three-week cycle: one cohort, warmed properly, finished inside 21 days.
+#
+#   linkedin-agent campaign new q4 --template three-week
+#
+# Everyone reaches an ending — replied, nurture, not_accepted or cannot_contact — about
+# three weeks after they are imported, so you can run cohorts back to back and read the
+# numbers of one before committing the next.
+#
+# Size it to your ramp. `linkedin-agent status` shows the ramp week; the invites you can
+# send in three weeks are roughly:
+#
+#   ramp week 1 →  75      (a new account: weeks at 25%, 40%, 60% of the caps)
+#   ramp week 5 → 180      (a settled account at 100%)
+#
+# Import 60 for a first cohort on a new account, and never more than about two thirds of
+# the number above: the last week has to have room for the messages, not just invites.
+#
+# What is different from the `default` playbook, and why:
+#
+#   - Two campaign windows. The invite keeps the good hours but adds Friday, because
+#     waiting for the next Tue–Thu costs up to four days of a twenty-one-day budget.
+#     Follow-ups use every weekday: the person is already connected by then, and the
+#     day of week barely moves reply rates once they are.
+#   - The warm-up is four days rather than six, one touch a day.
+#   - The acceptance check runs every second day, not daily. It is the largest cost
+#     driver in the whole sequence and a day's delay in noticing changes nothing.
+#   - Acceptance is given 8 days, not 21. Someone who has not accepted in eight days
+#     is not going to inside this cycle; the invite is withdrawn and they end cleanly.
+#   - The reply gaps are 3, 3 and 3 days instead of 3, 5 and 7. Tighter than the
+#     research prefers. That is the real price of the deadline, and it is the first
+#     thing to relax if you find you have room.
+#   - An invite that times out is withdrawn and then followed by one InMail, so a
+#     cohort is not simply written off after eight days of silence. This needs Sales
+#     Navigator and InMail credits; without them the step reports cannot_message and
+#     the lead ends as not_accepted exactly as it would have. To drop it, point the
+#     withdraw step's two results back at "end:not_accepted" and delete the two
+#     fallback steps.
+#
+# Typical path, importing on a Monday (delays are minimums; the agent adds jitter):
+#
+#   Mon d0  visit          Fri d4   invite           d6-12  m1 on acceptance
+#   Tue d1  follow         d5-12    acceptance       d9-15  m2
+#   Wed d2  like           d12      withdraw if      d12-18 m3
+#   Thu d3  comment                 still pending    d15-21 done
+#
+#   never accepted: d12 withdraw -> d12 InMail -> d16 reply check -> ends nurture
+
+name: three-week
+agent_name: "Your Name"
+company_name: "Your Company"
+value_proposition: >
+  One or two sentences on what you do and for whom. Used as context for comments and hooks.
+booking_link: ""
+default_timezone: "UTC"
+mode: standard
+
+quiet_threshold_days: 30      # no post in N days -> "quiet" branch (blank invite, no like/comment)
+withdraw_after_days: 21
+review_comments: false        # true = approve every model-written comment in `linkedin-agent review`
+
+# ── Windows, in each person's local time ────────────────────────────────────
+# `campaign show` prints what these resolve to. Delete this block to fall back to the
+# built-in send (Tue–Thu) and engage (Mon–Fri) windows, and expect the cycle to run long.
+windows:
+  invite:
+    days: [tue, wed, thu, fri]
+    hours: ["08:30-11:00", "14:00-16:00"]
+  followup:
+    days: [mon, tue, wed, thu, fri]
+    hours: ["08:30-11:00", "14:00-16:00"]
+
+# ── Your messages. Placeholders are filled per person. ─────────────────────
+# {first_name} {last_name} {company} {title} {headline} {post_topic} {location}
+# {agent_name} {company_name} {booking_link} {custom_<column>} from your CSV
+# {hook} = ONE model-written sentence from their post/headline (see personalization)
+messages:
+  connection_note: "Enjoyed your post on {post_topic} — glad to stay in touch."
+  connection_note_quiet: ""
+  m1: |
+    Hi {first_name}, thanks for connecting.
+    {hook}
+    Quick question — what does your team use today for the problem we care about?
+  m2: |
+    One thing that has helped teams like {company}: a short, specific example of the outcome you deliver.
+    Happy to share how if useful.
+  m3: |
+    No worries if the timing is off, {first_name} — if it's worth a 15-minute look:
+    {booking_link}
+  # Sent only to people who never accepted the invite. It is the first thing they read
+  # from you, so it repeats the offer rather than following on from anything.
+  inmail_subject: "Quick question, {first_name}"
+  inmail_body: |
+    Hi {first_name},
+    {hook}
+    I'm {agent_name} at {company_name}. One line on what you do and why it matters to them.
+    Worth a quick chat?
+
+personalization:
+  hook: one_sentence           # one_sentence | none
+  hook_fallback: "Noticed your work at {company}."
+
+# ── Sequence ────────────────────────────────────────────────────────────────
+steps:
+  # warm-up: one touch a day, four days
+  - {id: warm.visit,   action: visit,        after: 0d, window: any}
+  - {id: warm.follow,  action: follow,       after: 1d, window: engage}
+  - {id: warm.like,    action: like_post,    after: 1d, window: engage, branch: posts,
+     params: {pick: newest}}
+  - {id: warm.comment, action: comment_post, after: 1d, window: engage, branch: posts,
+     params: {pick: different_from_liked, max_sentences: 3}}
+  # invite: Tue–Fri, so a warm-up finishing on Thursday does not wait out the weekend
+  - {id: invite.posts, action: connect, after: 1d, window: invite, branch: posts,
+     params: {note_template: connection_note},
+     on_result: {sent: wait.accept, already_pending: wait.accept, already_connected: post.m1}}
+  - {id: invite.quiet, action: connect, after: 1d, window: invite, branch: quiet,
+     params: {note_template: connection_note_quiet},
+     on_result: {sent: wait.accept, already_pending: wait.accept, already_connected: post.m1}}
+  # acceptance: every second day, 8 days, then withdraw and end
+  - {id: wait.accept, action: check_connection, after: 1d, window: any,
+     params: {repeat_every: 2d, until_days: 8},
+     on_result: {connected: post.m1, pending: wait.accept, not_connected: wait.accept, timeout: withdraw}}
+  # never accepted: take the invite back, then spend one InMail instead of giving up
+  - {id: withdraw, action: withdraw_invite, after: 0d, window: any,
+     on_result: {withdrawn: fallback.inmail, not_pending: fallback.inmail}}
+  - {id: fallback.inmail, action: inmail, after: 0d, window: followup,
+     params: {template: inmail_body, subject_template: inmail_subject},
+     on_result: {sent: fallback.reply, cannot_message: "end:not_accepted"}}
+  - {id: fallback.reply, action: check_replies, after: 4d, window: any,
+     on_result: {replied: "end:replied", none: "end:nurture", no_thread: "end:nurture"}}
+  # post-acceptance: three messages, three days apart, any weekday
+  - {id: post.m1, action: message, after: 0d, window: followup, params: {template: m1}}
+  - {id: post.r1, action: check_replies, after: 3d, window: any,
+     on_result: {replied: "end:replied", none: post.m2, no_thread: post.m2}}
+  - {id: post.m2, action: message, after: 0d, window: followup, params: {template: m2}}
+  - {id: post.r2, action: check_replies, after: 3d, window: any,
+     on_result: {replied: "end:replied", none: post.m3, no_thread: post.m3}}
+  - {id: post.m3, action: message, after: 0d, window: followup, params: {template: m3}}
+  - {id: post.r3, action: check_replies, after: 3d, window: any,
+     on_result: {replied: "end:replied", none: "end:nurture", no_thread: "end:nurture"}}
