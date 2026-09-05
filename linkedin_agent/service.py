@@ -85,6 +85,7 @@ def write_heartbeat(settings: Settings, account: str, started_at: datetime) -> N
         "account": account,
         "started_at": started_at.isoformat(),
         "heartbeat_at": datetime.now(timezone.utc).isoformat(),
+        "fast_test": settings.fast_test,
     }
     path = heartbeat_path(settings)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -124,6 +125,9 @@ def run_state(settings: Settings, now: datetime | None = None) -> dict[str, Any]
     active = alive and age < HEARTBEAT_STALE_S
     return {
         "active": active,
+        # Whether the loop that is up has windows and spacing off. Not the same as this
+        # process's own setting: the run loop may have been started with a different env.
+        "fast_test": bool(data.get("fast_test")),
         "pid": data.get("pid"),
         "account": data.get("account"),
         "started_at": data.get("started_at"),

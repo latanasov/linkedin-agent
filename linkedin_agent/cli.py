@@ -649,7 +649,8 @@ def status(account: str = typer.Option(None)) -> None:
         state = run_state(app_.settings, now)
         if state["active"]:
             since = str(state.get("started_at") or "")[:16].replace("T", " ")
-            _echo(f"run loop: active · pid {state['pid']} · since {since}")
+            fast = " · FAST TEST (windows and spacing off)" if state.get("fast_test") else ""
+            _echo(f"run loop: active · pid {state['pid']} · since {since}{fast}")
         else:
             _echo(
                 f"run loop: NOT active ({state.get('reason', 'stopped')}) — "
