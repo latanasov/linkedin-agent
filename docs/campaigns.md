@@ -33,10 +33,25 @@ buys days:
   without them the step reports `cannot_message` and the lead ends as `not_accepted`
   exactly as it would have, at the cost of one wasted action.
 
-**Size the cohort to your ramp, not to your list.** The invites you can send in three weeks
-are the daily connect cap times four invite days, summed over the ramp — about 75 on a new
-account, about 180 once it is settled. Import no more than two thirds of that; the last
-week needs room for messages, not only invites. Sixty is a sensible first cohort.
+**Size the cohort to your ramp, not to your list.** The limit is not how many invites you
+can send in three weeks. It is how fast the whole cohort can clear the *warm-up* and be
+invited, because each lead still needs its acceptance window and three follow-ups
+afterwards — the last invite has to go out by about day 9 to finish by day 21.
+
+On a new account the cap that binds is comments, at 2 a day in ramp week 1 (follow is 4,
+connect 5), and about 60% of a list posts recently enough to get one:
+
+| Your ramp week | Cohort that finishes in 21 days |
+|---|---|
+| 1 | about 15 |
+| 3 | about 25 |
+| 5 and after | about 40 |
+
+`linkedin-agent status` shows the ramp week. A bigger cohort is not lost — it runs long.
+Sixty people on a new account finish in about 30 days rather than 21. If you want a larger
+first cohort on a fresh account, delete `warm.comment` (that is the bottleneck) and accept
+a colder invite, or treat the first cohort as a four-week cycle and move to the three-week
+cadence once the ramp is over.
 
 ## The top block: who you are
 

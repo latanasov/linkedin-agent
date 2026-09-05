@@ -257,11 +257,19 @@ acceptance check, and 3/3/3-day reply gaps. Reach for it when the user says "thr
 or wants back-to-back cohorts they can measure.
 
 Size the cohort to the ramp, and say the number out loud rather than letting them import
-a list that cannot fit. Invites available in three weeks are the daily connect cap times
-three send days (or four with this template's `invite` window), summed over the ramp:
-about 75 on a new account, about 180 at week 5. Import no more than two thirds of that —
-the last week needs room for messages, not only invites — so 60 is a sensible first
-cohort. Whatever they ask for, the arithmetic is the answer, not the ambition.
+a list that cannot fit. The limit is **not** the invites available in three weeks; it is
+how fast the cohort clears the warm-up and gets invited, since each lead then needs its
+acceptance window and three follow-ups. The last invite must go out by about day 9.
+
+On a new account the binding cap is `comment_post` at 2/day in ramp week 1 (follow 4,
+connect 5), and roughly 60% of a list is on the `posts` branch. So a cohort that really
+finishes in 21 days is about **15** at ramp week 1, **25** at week 3, **40** from week 5.
+Check `status` for their ramp week before answering.
+
+A larger cohort is not lost, it runs long — 60 on a new account finish in about 30 days.
+Offer that honestly, along with the two ways to make a bigger cohort fit: delete
+`warm.comment`, or call the first cohort a four-week cycle. Whatever they ask for, the
+arithmetic is the answer, not the ambition.
 
 **Comment approval:** set `review_comments: true`; nothing else changes. Comments park
 in `linkedin-agent review`; the sequence waits on them.
