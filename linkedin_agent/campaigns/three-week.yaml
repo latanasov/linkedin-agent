@@ -6,14 +6,23 @@
 # three weeks after they are imported, so you can run cohorts back to back and read the
 # numbers of one before committing the next.
 #
-# Size it to your ramp. `linkedin-agent status` shows the ramp week; the invites you can
-# send in three weeks are roughly:
+# Size the cohort to your ramp. The limit is not "invites you can send in three weeks" —
+# it is how fast the whole cohort can clear the *warm-up* and be invited, because every
+# lead still needs its acceptance window and three follow-ups afterwards. The last invite
+# has to go out by about day 9 for that lead to finish by day 21.
 #
-#   ramp week 1 →  75      (a new account: weeks at 25%, 40%, 60% of the caps)
-#   ramp week 5 → 180      (a settled account at 100%)
+# On a new account the binding cap is comments, at 2 a day in ramp week 1 (follow is 4,
+# connect 5). Roughly, a cohort that actually finishes inside 21 days:
 #
-# Import 60 for a first cohort on a new account, and never more than about two thirds of
-# the number above: the last week has to have room for the messages, not just invites.
+#   ramp week 1  →  about 15 people
+#   ramp week 3  →  about 25
+#   ramp week 5+ →  about 40
+#
+# `linkedin-agent status` shows your ramp week. A larger cohort is not lost, it simply
+# runs long: 60 people on a new account finish in about 30 days, not 21. If you want a
+# bigger first cohort on a fresh account, drop warm.comment (comments are the bottleneck)
+# and accept a colder invite, or run the cohort as a four-week cycle and move to the
+# three-week cadence once the account is past the ramp.
 #
 # What is different from the `default` playbook, and why:
 #
