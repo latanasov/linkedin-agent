@@ -1,0 +1,80 @@
+# Default campaign: the research-backed playbook (see LINKEDIN_CADENCE_RESEARCH.md).
+#
+# Copy this file with `linkedin-agent campaign new <name>`, then fill in the top block
+# and write your messages. Delays are minimums; the agent adds jitter and only acts
+# inside each step's window (send: Tue–Thu mornings/afternoons in the lead's time zone;
+# engage: weekdays 9–18; any: Mon–Sat 8–20).
+
+name: default
+agent_name: "Your Name"
+company_name: "Your Company"
+value_proposition: >
+  One or two sentences on what you do and for whom. Used as context for comments and hooks.
+booking_link: ""
+default_timezone: "UTC"
+mode: standard
+
+quiet_threshold_days: 30      # no post in N days -> "quiet" branch (blank invite, no like/comment)
+withdraw_after_days: 21       # withdraw invites that stay pending this long
+review_comments: false        # true = approve every model-written comment in `linkedin-agent review`
+
+# ── Your messages. Placeholders are filled per person. ─────────────────────
+# {first_name} {last_name} {company} {title} {headline} {post_topic} {location}
+# {agent_name} {company_name} {booking_link} {custom_<column>} from your CSV
+# {hook} = ONE model-written sentence from their post/headline (see personalization)
+messages:
+  connection_note: "Enjoyed your post on {post_topic} — glad to stay in touch."
+  connection_note_quiet: ""
+  m1: |
+    Hi {first_name}, thanks for connecting.
+    {hook}
+    Quick question — what does your team use today for the problem we care about?
+  m2: |
+    One thing that has helped teams like {company}: a short, specific example of the outcome you deliver.
+    Happy to share how if useful.
+  m3: |
+    If it's worth a 15-minute look, grab a slot here:
+    {booking_link}
+  inmail_subject: "Quick question, {first_name}"
+  inmail_body: |
+    Hi {first_name},
+    {hook}
+    I'm {agent_name} at {company_name}. One line on what you do and why it matters to them.
+    Worth a quick chat?
+
+personalization:
+  hook: one_sentence           # one_sentence | none
+  hook_fallback: "Noticed your work at {company}."
+
+# ── Sequence ────────────────────────────────────────────────────────────────
+steps:
+  # warm-up
+  - {id: warm.visit,   action: visit,        after: 0d, window: any}
+  - {id: warm.follow,  action: follow,       after: 1d, window: engage}
+  - {id: warm.like,    action: like_post,    after: 1d, window: engage, branch: posts,
+     params: {pick: newest}}
+  - {id: warm.comment, action: comment_post, after: 2d, window: engage, branch: posts,
+     params: {pick: different_from_liked, max_sentences: 3}}
+  # invite
+  - {id: invite.posts, action: connect, after: 2d, window: send, branch: posts,
+     params: {note_template: connection_note},
+     on_result: {sent: wait.accept, already_pending: wait.accept, already_connected: post.m1}}
+  - {id: invite.quiet, action: connect, after: 2d, window: send, branch: quiet,
+     params: {note_template: connection_note_quiet},
+     on_result: {sent: wait.accept, already_pending: wait.accept, already_connected: post.m1}}
+  # wait for acceptance (read-only check, daily, up to 21 days, then withdraw)
+  - {id: wait.accept, action: check_connection, after: 1d, window: any,
+     params: {repeat_every: 1d, until_days: 21},
+     on_result: {connected: post.m1, pending: wait.accept, not_connected: wait.accept, timeout: withdraw}}
+  - {id: withdraw, action: withdraw_invite, after: 0d, window: any,
+     on_result: {withdrawn: "end:not_accepted", not_pending: "end:not_accepted"}}
+  # post-acceptance
+  - {id: post.m1, action: message, after: 0d, window: send, params: {template: m1}}
+  - {id: post.r1, action: check_replies, after: 3d, window: any,
+     on_result: {replied: "end:replied", none: post.m2, no_thread: post.m2}}
+  - {id: post.m2, action: message, after: 0d, window: send, params: {template: m2}}
+  - {id: post.r2, action: check_replies, after: 5d, window: any,
+     on_result: {replied: "end:replied", none: post.m3, no_thread: post.m3}}
+  - {id: post.m3, action: message, after: 0d, window: send, params: {template: m3}}
+  - {id: post.r3, action: check_replies, after: 7d, window: any,
+     on_result: {replied: "end:replied", none: "end:nurture", no_thread: "end:nurture"}}

@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+.venv/
+venv/
+dist/
+build/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+coverage/
+
+# Environment and local agent data (never commit)
+.env
+.env.local
+.linkedin-agent/
+
+# Claude Code per-machine permissions (never commit; skills under .claude/skills are tracked)
+.claude/settings.local.json
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

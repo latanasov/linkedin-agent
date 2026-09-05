@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>linkedin-agent</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 16 16%27%3E%3Crect width=%2716%27 height=%2716%27 rx=%273%27 fill=%27%230a66c2%27/%3E%3Ctext x=%278%27 y=%2712%27 font-size=%2710%27 text-anchor=%27middle%27 fill=%27white%27 font-family=%27sans-serif%27 font-weight=%27bold%27%3Ein%3C/text%3E%3C/svg%3E">
+<style>
+  :root { --bg:#f6f7f9; --panel:#fff; --line:#e3e6ea; --text:#1d2330; --muted:#6b7280; --accent:#0a66c2;
+          --ok:#1a7f37; --warn:#b45309; --bad:#b91c1c; --chip:#eef2f7; }
+  * { box-sizing:border-box; }
+  [hidden] { display:none !important; }
+  nav.tabs button .n:empty { display:none; }
+  body { margin:0; font:14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color:var(--text); background:var(--bg); }
+  header { display:flex; flex-wrap:wrap; gap:12px 24px; align-items:center; padding:12px 20px; background:var(--panel); border-bottom:1px solid var(--line); position:sticky; top:0; z-index:5; }
+  header h1 { font-size:16px; margin:0 12px 0 0; }
+  .pill { display:inline-block; padding:2px 8px; border-radius:999px; background:var(--chip); font-size:12px; white-space:nowrap; }
+  .pill.ok { background:#e6f4ea; color:var(--ok);} .pill.warn { background:#fef3c7; color:var(--warn);} .pill.bad { background:#fee2e2; color:var(--bad);}
+  .pill.stage-new{background:#eef2f7} .pill.stage-warming{background:#e0f2fe;color:#075985} .pill.stage-invited{background:#fef3c7;color:#92400e}
+  .pill.stage-connected{background:#dcfce7;color:#166534} .pill.stage-messaging{background:#ede9fe;color:#5b21b6} .pill.stage-replied{background:#bbf7d0;color:#14532d}
+  .pill.stage-nurture{background:#e5e7eb;color:#374151} .pill.stage-not_accepted{background:#fee2e2;color:#991b1b} .pill.stage-cannot_contact{background:#fee2e2;color:#991b1b}
+  .pill.stage-done{background:#e5e7eb;color:#374151} .pill.stage-paused{background:#fde68a;color:#78350f}
+  main { padding:16px 20px; display:grid; gap:16px; }
+  .cards { display:grid; grid-template-columns:repeat(auto-fit, minmax(260px,1fr)); gap:12px; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:12px 14px; }
+  .card h2 { font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); margin:0 0 8px; }
+  .bar { display:grid; grid-template-columns:120px 1fr 120px; gap:8px; align-items:center; font-size:12px; margin:3px 0; }
+  .bar .track { height:6px; background:var(--chip); border-radius:3px; overflow:hidden; }
+  .bar .fill { height:100%; background:var(--accent); }
+  .bar .fill.full { background:var(--warn); }
+  nav.tabs { display:flex; gap:4px; border-bottom:1px solid var(--line); }
+  nav.tabs button { border:0; background:none; padding:8px 12px; font:inherit; color:var(--muted); cursor:pointer; border-bottom:2px solid transparent; }
+  nav.tabs button.active { color:var(--text); border-bottom-color:var(--accent); }
+  nav.tabs button .n { margin-left:4px; font-size:11px; background:var(--chip); border-radius:999px; padding:0 6px; }
+  section.tab { display:none; } section.tab.active { display:block; }
+  .toolbar { display:flex; gap:8px; flex-wrap:wrap; margin:10px 0; align-items:center; }
+  input, select { font:inherit; padding:5px 8px; border:1px solid var(--line); border-radius:6px; background:#fff; }
+  button.act { font:inherit; font-size:12px; padding:3px 8px; border:1px solid var(--line); background:#fff; border-radius:6px; cursor:pointer; }
+  button.act:hover { border-color:var(--accent); color:var(--accent); }
+  button.act.danger:hover { border-color:var(--bad); color:var(--bad); }
+  table { width:100%; border-collapse:collapse; background:var(--panel); border:1px solid var(--line); border-radius:8px; overflow:hidden; }
+  th, td { text-align:left; padding:7px 10px; border-bottom:1px solid var(--line); vertical-align:top; font-size:13px; }
+  th { background:#fafbfc; color:var(--muted); font-weight:600; font-size:12px; cursor:pointer; user-select:none; white-space:nowrap; }
+  tr.row { cursor:pointer; } tr.row:hover td { background:#f8fafc; }
+  td.mono, .mono { font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:12px; }
+  .muted { color:var(--muted); } .small { font-size:12px; }
+  .wrap { overflow-x:auto; }
+  .empty { padding:24px; text-align:center; color:var(--muted); background:var(--panel); border:1px dashed var(--line); border-radius:8px; }
+  #drawer { position:fixed; top:0; right:0; height:100%; width:min(560px, 100%); background:var(--panel); border-left:1px solid var(--line); box-shadow:-8px 0 24px rgba(0,0,0,.08); transform:translateX(100%); transition:transform .15s; overflow:auto; z-index:10; padding:16px 20px; }
+  #drawer.open { transform:none; }
+  #drawer h3 { margin:0 0 4px; } #drawer .close { float:right; }
+  dl { display:grid; grid-template-columns:130px 1fr; gap:4px 10px; margin:8px 0; font-size:13px; } dt { color:var(--muted); } dd { margin:0; word-break:break-word; }
+  .timeline li { margin:2px 0; font-size:13px; } .timeline { padding-left:18px; }
+  pre.text { white-space:pre-wrap; background:#f8fafc; border:1px solid var(--line); border-radius:6px; padding:8px; font:12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; margin:4px 0; }
+  .toast { position:fixed; bottom:16px; left:50%; transform:translateX(-50%); background:#111827; color:#fff; padding:8px 14px; border-radius:8px; font-size:13px; opacity:0; transition:opacity .2s; pointer-events:none; z-index:20; }
+  .toast.show { opacity:1; }
+  .metric { display:flex; justify-content:space-between; padding:4px 0; border-bottom:1px dotted var(--line); font-size:13px; }
+  .metric b { font-variant-numeric:tabular-nums; }
+  a { color:var(--accent); text-decoration:none; } a:hover { text-decoration:underline; }
+</style>
+</head>
+<body>
+<header>
+  <h1>linkedin-agent</h1>
+  <span id="acct"></span>
+  <span id="fast" class="pill warn" hidden>FAST TEST</span>
+  <span class="muted small" style="margin-left:auto">refreshed <span id="refreshed">–</span> · every <select id="interval"><option value="10000">10s</option><option value="30000" selected>30s</option><option value="60000">60s</option><option value="0">off</option></select></span>
+  <button class="act" onclick="refresh()">Refresh</button>
+</header>
+
+<main>
+  <div class="cards">
+    <div class="card"><h2>Today against caps</h2><div id="usage"></div></div>
+    <div class="card"><h2>Leads by stage</h2><div id="stages"></div><h2 style="margin-top:12px">Queue</h2><div id="queue" class="small"></div></div>
+    <div class="card"><h2>Last results</h2><div id="recent" class="small"></div></div>
+  </div>
+
+  <nav class="tabs" id="tabs">
+    <button data-tab="leads" class="active">Leads<span class="n" id="n-leads"></span></button>
+    <button data-tab="inbox">Inbox<span class="n" id="n-inbox"></span></button>
+    <button data-tab="review">Review<span class="n" id="n-review"></span></button>
+    <button data-tab="queue">Queue<span class="n" id="n-queue"></span></button>
+    <button data-tab="log">Activity</button>
+    <button data-tab="report">Report</button>
+    <button data-tab="campaigns">Campaigns</button>
+  </nav>
+
+  <section class="tab active" id="tab-leads">
+    <div class="toolbar">
+      <input id="q" placeholder="Search name, company, url…" size="32">
+      <select id="f-stage"><option value="">all stages</option></select>
+      <select id="f-campaign"><option value="">all campaigns</option></select>
+      <span class="muted small" id="leads-count"></span>
+    </div>
+    <div class="wrap"><table id="leads"><thead><tr>
+      <th data-k="name">Name</th><th data-k="company">Company</th><th data-k="campaign">Campaign</th><th data-k="stage">Stage</th>
+      <th data-k="step_id">Step</th><th data-k="next_due_at">Next due</th><th data-k="invited_at">Invited</th><th data-k="connected_at">Connected</th>
+      <th data-k="last_message_at">Messaged</th><th data-k="replied_at">Replied</th><th></th>
+    </tr></thead><tbody></tbody></table></div>
+  </section>
+
+  <section class="tab" id="tab-inbox"><div id="inbox"></div></section>
+  <section class="tab" id="tab-review"><div id="review"></div></section>
+  <section class="tab" id="tab-queue">
+    <div class="toolbar"><select id="f-task"><option value="">recent</option><option>queued</option><option>running</option><option>awaiting_review</option><option>failed</option><option>skipped</option><option>done</option></select></div>
+    <div id="tasks"></div>
+  </section>
+  <section class="tab" id="tab-log"><div id="log"></div></section>
+  <section class="tab" id="tab-report">
+    <div class="toolbar"><select id="r-campaign"><option value="">all campaigns</option></select><select id="r-since"><option value="7d">last 7 days</option><option value="14d">last 14 days</option><option value="30d" selected>last 30 days</option><option value="90d">last 90 days</option></select></div>
+    <div class="cards" id="report"></div>
+  </section>
+  <section class="tab" id="tab-campaigns"><div id="campaigns"></div></section>
+</main>
+
+<aside id="drawer"><button class="act close" onclick="closeDrawer()">✕</button><div id="drawer-body"></div></aside>
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = (s, el=document) => el.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const state = { leads: [], sort: {k:'next_due_at', dir:1}, tab:'leads', timer:null, overview:null, openLead:null };
+
+function rel(iso) {
+  if (!iso) return '';
+  const d = new Date(iso), diff = (d - Date.now())/1000, a = Math.abs(diff);
+  const u = a<90 ? [Math.round(a),'s'] : a<5400 ? [Math.round(a/60),'m'] : a<129600 ? [Math.round(a/3600),'h'] : [Math.round(a/86400),'d'];
+  return diff < 0 ? `${u[0]}${u[1]} ago` : `in ${u[0]}${u[1]}`;
+}
+function when(iso) { return iso ? `<span title="${esc(iso)}">${rel(iso)}</span>` : '<span class="muted">–</span>'; }
+function stagePill(s) { return `<span class="pill stage-${esc(s)}">${esc(s)}</span>`; }
+function toast(msg, bad) { const t=$('#toast'); t.textContent=msg; t.style.background = bad ? '#b91c1c' : '#111827'; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'), 2500); }
+
+async function api(path, opts) {
+  const r = await fetch(path, opts);
+  const body = await r.json().catch(()=>({}));
+  if (!r.ok) throw new Error(body.error || r.statusText);
+  return body;
+}
+async function act(path, body) {
+  try { const r = await api(path, {method:'POST', headers:{'content-type':'application/json'}, body: body ? JSON.stringify(body) : undefined}); toast(r.message || 'ok'); await refresh(); }
+  catch (e) { toast(e.message, true); }
+}
+
+// ── overview ──────────────────────────────────────────────────────────────
+function renderOverview(o) {
+  const a = o.account;
+  const login = {logged_in:['ok','logged in'], profile_exists:['warn','profile, not verified'], not_logged_in:['bad','NOT logged in'], session_expired:['bad','SESSION EXPIRED – run login']}[a.login];
+  const breaker = a.breaker_tripped ? `<span class="pill bad" title="${esc(a.trip_reason)}">breaker tripped until ${esc(new Date(a.tripped_until).toLocaleString())} <button class="act" onclick="act('/api/breaker/reset')">reset</button></span>` : '<span class="pill ok">breaker ok</span>';
+  const gov = a.governor==='normal' ? 'ok' : a.governor==='halved' ? 'warn' : 'bad';
+  $('#acct').innerHTML = `<span class="pill">${esc(a.account)}</span> <span class="pill ${login[0]}">${login[1]}</span> ${breaker} <span class="pill ${gov}">governor ${esc(a.governor)}</span> <span class="pill">ramp week ${a.ramp_week}</span>`;
+  $('#fast').hidden = !o.fast_test;
+  $('#usage').innerHTML = o.usage.map(u => {
+    const pct = u.day_cap ? Math.min(100, 100*u.day/u.day_cap) : 0;
+    const wk = u.week_cap != null ? ` · wk ${u.week}/${u.week_cap}` : '';
+    return `<div class="bar"><span>${esc(u.action)}</span><div class="track"><div class="fill ${pct>=100?'full':''}" style="width:${pct}%"></div></div><span class="mono" style="white-space:nowrap">${u.day}/${u.day_cap}${wk}</span></div>`;
+  }).join('');
+  const order = ['new','warming','invited','connected','messaging','replied','nurture','not_accepted','cannot_contact','done','paused'];
+  const st = o.stages || {};
+  $('#stages').innerHTML = order.filter(k => st[k]).map(k => `<span class="pill stage-${k}" style="margin:2px">${k} <b>${st[k]}</b></span>`).join(' ') || '<span class="muted">no leads yet</span>';
+  const q = o.queue;
+  $('#queue').innerHTML = `queued <b>${q.queued}</b> · running <b>${q.running}</b> · awaiting review <b>${q.awaiting_review}</b> · failed <b>${q.failed}</b> · done <b>${q.done}</b>`;
+  $('#recent').innerHTML = o.recent.length ? o.recent.map(t => `<div><span class="mono muted">${t.finished_at ? new Date(t.finished_at).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '–'}</span> ${esc(t.action)} <a href="#" onclick="openLead('${esc(t.lead_id||'')}');return false">${esc(t.lead_name)}</a> → <b>${esc(t.result_status || t.status)}</b>${t.result_error ? ` <span class="muted">${esc(t.result_error)}</span>` : ''}</div>`).join('') : '<span class="muted">nothing yet</span>';
+  $('#n-inbox').textContent = q.inbox || ''; $('#n-review').textContent = q.review_pending || ''; $('#n-queue').textContent = (q.queued + q.running + q.failed) || '';
+  const camps = o.campaigns;
+  for (const id of ['#f-campaign', '#r-campaign']) {
+    const sel = $(id), cur = sel.value; sel.innerHTML = '<option value="">all campaigns</option>' + camps.map(c => `<option>${esc(c)}</option>`).join(''); sel.value = cur;
+  }
+  const fs = $('#f-stage'), cur = fs.value; fs.innerHTML = '<option value="">all stages</option>' + order.map(k => `<option>${k}</option>`).join(''); fs.value = cur;
+}
+
+// ── leads ─────────────────────────────────────────────────────────────────
+function renderLeads() {
+  const q = $('#q').value.toLowerCase(), st = $('#f-stage').value, camp = $('#f-campaign').value;
+  let rows = state.leads.filter(l => (!st || l.stage===st) && (!camp || l.campaign===camp) &&
+    (!q || [l.name, l.company, l.linkedin_url, l.title, l.headline].join(' ').toLowerCase().includes(q)));
+  const {k, dir} = state.sort;
+  rows.sort((a,b) => { const x=a[k]??'', y=b[k]??''; return (x<y?-1:x>y?1:0)*dir; });
+  $('#leads-count').textContent = `${rows.length} of ${state.leads.length}`;
+  $('#n-leads').textContent = state.leads.length || '';
+  $('#leads tbody').innerHTML = rows.map(l => `<tr class="row" onclick="openLead('${esc(l.id)}')">
+    <td><b>${esc(l.name)}</b><div class="muted small">${esc(l.title||l.headline||'')}</div></td>
+    <td>${esc(l.company||'')}</td><td>${esc(l.campaign)}</td><td>${stagePill(l.stage)}</td>
+    <td class="mono">${esc(l.step_id||'—')}${l.stalled ? ' <span class="pill bad">stalled</span>' : ''}</td>
+    <td>${l.step_id ? when(l.next_due_at) : '<span class="muted">ended</span>'}</td>
+    <td>${when(l.invited_at)}</td><td>${when(l.connected_at)}</td><td>${when(l.last_message_at)}</td><td>${when(l.replied_at)}</td>
+    <td onclick="event.stopPropagation()">${leadActions(l)}</td></tr>`).join('') || `<tr><td colspan="11" class="muted">no leads match</td></tr>`;
+}
+function leadActions(l) {
+  const b = [];
+  if (l.stalled) b.push(`<button class="act" onclick="act('/api/leads/${l.id}/retry')">retry</button>`);
+  if (l.step_id) b.push(`<button class="act" onclick="act('/api/leads/${l.id}/skip')">skip step</button>`);
+  if (l.stage==='replied') b.push(`<button class="act" onclick="act('/api/leads/${l.id}/handled')">handled</button>`);
+  b.push(`<button class="act" onclick="restartPrompt('${l.id}')">restart…</button>`);
+  return b.join(' ');
+}
+function restartPrompt(id) {
+  const step = prompt('Restart at step id (empty = first step):', '');
+  if (step === null) return;
+  act(`/api/leads/${id}/restart`, {step: step.trim() || null});
+}
+async function openLead(id) {
+  if (!id) return;
+  let l; try { l = await api('/api/leads/' + id); } catch (e) { toast(e.message, true); return; }
+  state.openLead = id;
+  const posts = (l.post_list||[]).filter(p => p.text);
+  $('#drawer-body').innerHTML = `
+    <h3>${esc(l.name)} ${stagePill(l.stage)}</h3>
+    <div class="muted small">${esc(l.title||l.headline||'')}${l.company ? ' · '+esc(l.company) : ''}</div>
+    <div class="small"><a href="${esc(l.linkedin_url)}" target="_blank" rel="noopener">${esc(l.linkedin_url)}</a></div>
+    <div class="toolbar">${leadActions(l)}</div>
+    <dl><dt>Campaign</dt><dd>${esc(l.campaign)} ${l.branch ? '· branch '+esc(l.branch) : ''}</dd>
+        <dt>Current step</dt><dd class="mono">${esc(l.step_id||'ended')} ${l.step_id ? (l.stalled ? '<span class="pill bad">stalled</span>' : 'due '+rel(l.next_due_at)) : ''}</dd>
+        <dt>Time zone</dt><dd>${esc(l.timezone||'')} ${l.location ? '· '+esc(l.location) : ''}</dd>
+        <dt>Invited</dt><dd>${when(l.invited_at)}</dd><dt>Connected</dt><dd>${when(l.connected_at)}</dd>
+        <dt>Last message</dt><dd>${when(l.last_message_at)}</dd><dt>Replied</dt><dd>${when(l.replied_at)}</dd>
+        ${l.prior_reply_text ? `<dt>Prior reply</dt><dd class="muted">${esc(l.prior_reply_text)}</dd>` : ''}
+    </dl>
+    ${l.last_message_text ? `<h4>Last message sent</h4><pre class="text">${esc(l.last_message_text)}</pre>` : ''}
+    ${posts.length ? `<h4>Posts seen (${posts.length})</h4>` + posts.map(p => `<div class="small">${p.posted_days_ago!=null ? p.posted_days_ago+'d ago' : ''} ${p.liked?'<span class="pill">liked</span>':''} ${p.commented?'<span class="pill">commented</span>':''} ${p.url ? `<a href="${esc(p.url)}" target="_blank" rel="noopener">open</a>` : ''}<div class="muted">${esc(p.text.slice(0,200))}</div></div>`).join('') : ''}
+    ${Object.keys(l.profile||{}).length ? `<h4>Profile</h4><dl>${Object.entries(l.profile).filter(([k,v])=>v && k!=='about').map(([k,v]) => `<dt>${esc(k)}</dt><dd>${esc(String(v).slice(0,200))}</dd>`).join('')}</dl>` : ''}
+    ${Object.keys(l.custom_fields||{}).length ? `<h4>CSV fields</h4><dl>${Object.entries(l.custom_fields).map(([k,v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>` : ''}
+    <h4>Sequence history</h4>
+    ${l.history.length ? `<ul class="timeline">${l.history.slice().reverse().map(h => `<li><span class="mono muted">${esc((h.at||'').slice(0,16).replace('T',' '))}</span> <span class="mono">${esc(h.step_id)}</span> → <b>${esc(h.result)}</b></li>`).join('')}</ul>` : '<div class="muted small">nothing yet</div>'}
+    <h4>Tasks</h4>
+    ${l.tasks.length ? l.tasks.map(t => `<div class="small" style="margin:6px 0"><span class="mono muted">${esc((t.finished_at||t.created_at||'').slice(0,16).replace('T',' '))}</span> <b>${esc(t.action)}</b> <span class="mono">${esc(t.step_id||'')}</span> · ${esc(t.status)}${t.result_status ? ' → <b>'+esc(t.result_status)+'</b>' : ''}${t.result_error ? ' <span class="muted">'+esc(t.result_error)+'</span>' : ''}${t.attempts>1 ? ' <span class="muted">attempts '+t.attempts+'</span>' : ''}${t.text ? `<pre class="text">${esc(t.text)}</pre>` : ''}</div>`).join('') : '<div class="muted small">none</div>'}`;
+  $('#drawer').classList.add('open');
+}
+function closeDrawer() { $('#drawer').classList.remove('open'); state.openLead = null; }
+
+// ── other tabs ────────────────────────────────────────────────────────────
+async function renderInbox() {
+  const rows = await api('/api/inbox');
+  $('#inbox').innerHTML = rows.length ? `<div class="wrap"><table><thead><tr><th>Name</th><th>Replied</th><th>After</th><th>Thread</th><th></th></tr></thead><tbody>` +
+    rows.map(l => `<tr class="row" onclick="openLead('${esc(l.id)}')"><td><b>${esc(l.name)}</b><div class="muted small">${esc(l.company||'')}</div></td><td>${when(l.replied_at)}</td><td>${l.last_message_at ? 'message sent '+rel(l.last_message_at) : '–'}</td><td onclick="event.stopPropagation()"><a href="${esc(l.linkedin_url)}" target="_blank" rel="noopener">open profile</a></td><td onclick="event.stopPropagation()"><button class="act" onclick="act('/api/leads/${l.id}/handled')">mark handled</button></td></tr>`).join('') + '</tbody></table></div>'
+    : '<div class="empty">Inbox empty. Leads who reply land here; answer them in LinkedIn, then mark handled.</div>';
+}
+async function renderReview() {
+  const items = await api('/api/review');
+  $('#review').innerHTML = items.length ? items.map(it => `<div class="card" style="margin-bottom:10px">
+    <div><b>${esc(it.context.lead)}</b> <span class="muted small">post ${it.context.post_age_days ?? '?'}d ago · ${esc(it.context.headline||'')}</span></div>
+    <pre class="text">${esc(it.context.post_text||'')}</pre>
+    <div class="small muted">Draft comment</div>
+    <textarea id="rv-${esc(it.task_id)}" style="width:100%;min-height:70px;font:inherit;padding:6px;border:1px solid var(--line);border-radius:6px">${esc(it.draft)}</textarea>
+    <div class="toolbar"><button class="act" onclick="act('/api/review/${esc(it.task_id)}', {approve:true, text: $('#rv-${esc(it.task_id)}').value})">approve</button><button class="act danger" onclick="act('/api/review/${esc(it.task_id)}', {approve:false})">reject</button></div>
+  </div>`).join('') : '<div class="empty">Nothing to review. Turn on <code>review_comments</code> in a campaign to approve comments here.</div>';
+}
+async function renderTasks() {
+  const st = $('#f-task').value;
+  const rows = await api('/api/tasks?limit=200' + (st ? '&status='+st : ''));
+  $('#tasks').innerHTML = rows.length ? `<div class="wrap"><table><thead><tr><th>When</th><th>Action</th><th>Lead</th><th>Step</th><th>Status</th><th>Result</th><th>Attempts</th><th>Window</th></tr></thead><tbody>` +
+    rows.map(t => `<tr class="row" onclick="openLead('${esc(t.lead_id||'')}')"><td class="mono">${esc((t.finished_at||t.created_at||'').slice(5,16).replace('T',' '))}</td><td>${esc(t.action)}</td><td>${esc(t.lead_name)}</td><td class="mono">${esc(t.step_id||'')}</td><td>${esc(t.status)}</td><td><b>${esc(t.result_status||'')}</b> <span class="muted">${esc(t.result_error||'')}</span></td><td>${t.attempts}</td><td class="small muted">${t.not_before ? 'from '+rel(t.not_before) : ''}${t.not_after ? ' until '+rel(t.not_after) : ''}</td></tr>`).join('') + '</tbody></table></div>' : '<div class="empty">No tasks.</div>';
+}
+async function renderLog() {
+  const rows = await api('/api/log?limit=200');
+  $('#log').innerHTML = rows.length ? `<div class="wrap"><table><thead><tr><th>When</th><th>Action</th><th>OK</th><th>Result</th></tr></thead><tbody>` +
+    rows.map(e => `<tr><td class="mono">${esc((e.at||'').slice(5,16).replace('T',' '))}</td><td>${esc(e.action)}</td><td>${e.ok ? '<span class="pill ok">ok</span>' : '<span class="pill bad">fail</span>'}</td><td>${esc(e.result_status||'')}</td></tr>`).join('') + '</tbody></table></div>' : '<div class="empty">No actions yet.</div>';
+}
+async function renderReport() {
+  const c = $('#r-campaign').value, s = $('#r-since').value;
+  const r = await api(`/api/report?since=${s}` + (c ? '&campaign='+encodeURIComponent(c) : ''));
+  const pct = v => v == null ? 'n/a' : (100*v).toFixed(1)+'%';
+  const vs = (v, b) => v == null ? '' : `<span class="pill ${v>=b?'ok':'warn'}">benchmark ${pct(b)}</span>`;
+  $('#report').innerHTML = `
+    <div class="card"><h2>Funnel · ${r.leads} leads</h2>
+      <div class="metric"><span>Warm-up completed</span><b>${r.warmed}</b></div>
+      <div class="metric"><span>Invites sent</span><b>${r.invited}</b></div>
+      <div class="metric"><span>Accepted</span><b>${r.accepted} (${pct(r.acceptance_rate)}) ${vs(r.acceptance_rate, r.acceptance_benchmark)}</b></div>
+      <div class="metric"><span>Median time to accept</span><b>${r.median_days_to_accept != null ? r.median_days_to_accept.toFixed(1)+' days' : 'n/a'}</b></div>
+      <div class="metric"><span>Withdrawn</span><b>${r.withdrawn}</b></div>
+      <div class="metric"><span>Messaged</span><b>${r.messaged}</b></div>
+      <div class="metric"><span>Replied</span><b>${r.replied} (${pct(r.reply_rate)}) ${vs(r.reply_rate, r.reply_benchmark)}</b></div>
+    </div>
+    <div class="card"><h2>Stages</h2>${Object.entries(r.stages).sort().map(([k,v]) => `<div class="metric"><span>${stagePill(k)}</span><b>${v}</b></div>`).join('') || '<span class="muted">none</span>'}
+      <div class="metric" style="margin-top:8px"><span>Governor</span><b>${esc(r.governor)}</b></div><div class="metric"><span>Breaker</span><b>${r.breaker_tripped ? 'tripped' : 'ok'}</b></div></div>`;
+}
+async function renderCampaigns() {
+  const rows = await api('/api/campaigns');
+  $('#campaigns').innerHTML = rows.length ? rows.map(c => `<div class="card" style="margin-bottom:10px">
+    <div class="toolbar"><b>${esc(c.name)}</b> <span class="pill">${esc(c.mode)}</span> ${c.paused ? '<span class="pill warn">paused</span>' : ''}
+      ${Object.entries(c.leads).sort().map(([k,v]) => `<span class="pill stage-${k}">${k} ${v}</span>`).join(' ')}
+      <span style="margin-left:auto">${c.paused ? `<button class="act" onclick="act('/api/campaigns/${esc(c.name)}/resume')">resume</button>` : `<button class="act danger" onclick="if(confirm('Pause every lead in ${esc(c.name)}?')) act('/api/campaigns/${esc(c.name)}/pause')">pause</button>`}</span></div>
+    <div class="wrap"><table><thead><tr><th>Step</th><th>Action</th><th>After</th><th>Window</th><th>Branch</th></tr></thead><tbody>${c.steps.map(s => `<tr><td class="mono">${esc(s.id)}</td><td>${esc(s.action)}</td><td>${esc(s.after)}</td><td>${esc(s.window)}</td><td>${s.branch==='any' ? '' : esc(s.branch)}</td></tr>`).join('')}</tbody></table></div>
+  </div>`).join('') : '<div class="empty">No campaign files in ~/.linkedin-agent/campaigns.</div>';
+}
+
+// ── refresh & wiring ──────────────────────────────────────────────────────
+const tabRenderers = { inbox: renderInbox, review: renderReview, queue: renderTasks, log: renderLog, report: renderReport, campaigns: renderCampaigns };
+async function refresh() {
+  try {
+    const [o, leads] = await Promise.all([api('/api/overview'), api('/api/leads')]);
+    state.overview = o; state.leads = leads;
+    renderOverview(o); renderLeads();
+    if (tabRenderers[state.tab]) await tabRenderers[state.tab]();
+    if (state.openLead) openLead(state.openLead);
+    $('#refreshed').textContent = new Date().toLocaleTimeString();
+  } catch (e) { toast('refresh failed: ' + e.message, true); }
+}
+function schedule() {
+  clearInterval(state.timer);
+  const ms = Number($('#interval').value);
+  if (ms) state.timer = setInterval(refresh, ms);
+}
+$('#tabs').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  state.tab = b.dataset.tab;
+  document.querySelectorAll('#tabs button').forEach(x => x.classList.toggle('active', x===b));
+  document.querySelectorAll('section.tab').forEach(s => s.classList.toggle('active', s.id === 'tab-'+state.tab));
+  if (tabRenderers[state.tab]) tabRenderers[state.tab]().catch(err => toast(err.message, true));
+});
+for (const id of ['#q', '#f-stage', '#f-campaign']) $(id).addEventListener('input', renderLeads);
+$('#f-task').addEventListener('change', renderTasks);
+$('#r-campaign').addEventListener('change', renderReport); $('#r-since').addEventListener('change', renderReport);
+$('#interval').addEventListener('change', schedule);
+document.querySelectorAll('#leads th[data-k]').forEach(th => th.addEventListener('click', () => {
+  const k = th.dataset.k; state.sort = { k, dir: state.sort.k===k ? -state.sort.dir : 1 }; renderLeads();
+}));
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawer(); });
+refresh(); schedule();
+</script>
+</body>
+</html>
