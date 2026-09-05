@@ -1,0 +1,51 @@
+# Sales Navigator / InMail variant: same warm-up, then one InMail instead of a
+# connection request, then the same reply checks and follow-ups.
+
+name: inmail
+agent_name: "Your Name"
+company_name: "Your Company"
+value_proposition: >
+  One or two sentences on what you do and for whom.
+booking_link: ""
+default_timezone: "UTC"
+mode: inmail
+quiet_threshold_days: 30
+withdraw_after_days: 21
+review_comments: false
+
+messages:
+  inmail_subject: "Quick question, {first_name}"
+  inmail_body: |
+    Hi {first_name},
+    {hook}
+    I'm {agent_name} at {company_name}. One line on what you do and why it matters to them.
+    Worth a quick chat?
+  m2: |
+    Following up on my note — one specific example of the outcome you deliver for teams like {company}.
+    Happy to share more if useful.
+  m3: |
+    If it's worth a 15-minute look, grab a slot here:
+    {booking_link}
+
+personalization:
+  hook: one_sentence
+  hook_fallback: "Noticed your work at {company}."
+
+steps:
+  - {id: warm.visit,   action: visit,        after: 0d, window: any}
+  - {id: warm.follow,  action: follow,       after: 1d, window: engage}
+  - {id: warm.like,    action: like_post,    after: 1d, window: engage, branch: posts, params: {pick: newest}}
+  - {id: warm.comment, action: comment_post, after: 2d, window: engage, branch: posts,
+     params: {pick: different_from_liked, max_sentences: 3}}
+  - {id: send.inmail, action: inmail, after: 2d, window: send,
+     params: {template: inmail_body, subject_template: inmail_subject}}
+  - {id: post.r1, action: check_replies, after: 3d, window: any,
+     on_result: {replied: "end:replied", none: post.m2, no_thread: post.m2}}
+  - {id: post.m2, action: inmail, after: 0d, window: send,
+     params: {template: m2, subject_template: inmail_subject}}
+  - {id: post.r2, action: check_replies, after: 5d, window: any,
+     on_result: {replied: "end:replied", none: post.m3, no_thread: post.m3}}
+  - {id: post.m3, action: inmail, after: 0d, window: send,
+     params: {template: m3, subject_template: inmail_subject}}
+  - {id: post.r3, action: check_replies, after: 7d, window: any,
+     on_result: {replied: "end:replied", none: "end:nurture", no_thread: "end:nurture"}}

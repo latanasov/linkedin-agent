@@ -1,0 +1,169 @@
+# Troubleshooting
+
+Every message the agent can show you, what it means, and what to do. Nothing here loses
+data: the state is in `~/.linkedin-agent/agent.db` and every command resumes from it.
+
+Start with `linkedin-agent doctor`. It checks Python, the settings file, the key, the
+browser, the login, the campaigns, the leads, the breaker and whether the run loop is up,
+and prints a fix next to anything that fails.
+
+## Install and setup
+
+**`linkedin-agent: command not found`**
+The virtual environment is not active. `source .venv/bin/activate` in the repository
+folder, then try again.
+
+**`No module named aiosqlite` (or any other module) when running tests**
+A global `pytest` is shadowing the one in the virtual environment. Use
+`python -m pytest -q` instead.
+
+**`ERROR: file:///… does not appear to be a Python project`**
+You ran `pip install -e .` from the wrong folder. Run it from the repository root, where
+`pyproject.toml` is.
+
+**`zsh: bad pattern` or `no matches found`**
+A `#` comment or a `{placeholder}` on the command line. zsh treats both specially. Drop
+the comment; quote anything with braces.
+
+**`Playwright Chromium is not installed`**
+Run `playwright install chromium`, or set `LINKEDIN_AGENT_CHROME_PATH` to your Chrome.
+On a Mac that is `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`.
+
+## Login
+
+**The Chrome window opens but Google sign-in does nothing, or a popup never appears**
+Make sure you are on the current version: `login` opens a plain, un-automated Chrome
+precisely so sign-in popups work. If an older version froze on "Debugger paused", update
+and run `login` again.
+
+**`Not logged in after login`**
+You closed the window before the feed was showing, or LinkedIn asked for a second
+factor you did not complete. Run `login` again and wait for the feed.
+
+**`Session expired — run linkedin-agent login`**
+LinkedIn signed you out. Run `login`, sign in, `run` again. Nothing is lost. This can
+happen after a password change or a security check on LinkedIn's side.
+
+## Running
+
+**`0 tasks scheduled` on every tick**
+Usually nothing is due yet. Check `status`: if the leads are in `invited`, the agent is
+waiting for acceptances; if `nurture`, `replied`, `done` or `not_accepted`, their
+sequences have ended. If it says "account gated", the breaker or a session expiry is
+holding everything; see below. If a campaign is paused, `resume` it.
+
+**`Rate limit reached for connect today; next at 08:00 tomorrow`**
+Normal. Today's cap is used up. See [Safety and limits](safety.md).
+
+**`Ramp week 1`**
+Normal for a new account or a fresh database. Caps are at a quarter for seven days.
+
+**`Governor: acceptance rate 24%, invites halved`**
+Too few people accept your invites. Improve targeting and your profile before sending
+more. Below 20% invites pause until the rate recovers.
+
+**`Circuit breaker tripped for 48h: LinkedIn restriction signal`**
+The agent saw "unusual activity" or similar. Do nothing on LinkedIn for two days, then
+check your account by hand. `breaker reset` only if you are sure it was a false alarm.
+
+**`Circuit breaker tripped for 48h after 3 failures`**
+Three actions in a row failed for ordinary reasons, usually a LinkedIn layout the model
+could not read. Look at `log` and the failed tasks on the dashboard. `breaker reset` when
+you have seen what failed.
+
+**`failed · other; retry 1/3`**
+One action failed and is retried in ten minutes. After three attempts the lead's step
+stalls. `retry <lead>` re-arms it, `skip <lead>` moves on without it.
+
+**A lead shows `cannot_contact` but LinkedIn shows the invite as pending**
+The model misread the profile. The agent double-checks every such verdict now, so this
+should be rare. Put the lead back at the wait step:
+
+```bash
+linkedin-agent restart <lead> --step wait.accept
+```
+
+**A lead shows `replied` but the person did not answer**
+The model counted an older message from a previous conversation. The agent now checks
+where the reply sits relative to your message and remembers what was in the thread
+before it sent, so this should not recur. Continue with:
+
+```bash
+linkedin-agent restart <lead> --step post.r1
+```
+
+**`resumed after about N min asleep; checking network`**
+The machine slept. The agent restarts the browser and waits for LinkedIn to answer before
+continuing. Nothing to do. If it says the network is still unavailable after ten minutes,
+it carries on and the next task will fail and retry until Wi-Fi is back.
+
+**`crash (2/6 browser retries); retrying`**
+The browser died or the machine slept during an action. These retries do not count
+against the lead's attempts or the breaker. After six the task is marked failed; look at
+it with `get_lead` or the dashboard and `retry` it.
+
+**`Browser has no usable tab; restarting it`**
+The browser window was closed, usually by hand. The agent relaunches it. Run with
+`--headless` to keep the window out of sight.
+
+**`Page readiness timeout` and other lines from browser_use**
+Noise from the browser library about a blank tab. Harmless. They only show with `-v`.
+
+**`send_button_not_found`**
+The model could not find LinkedIn's Send button. It is retried; the retry checks the
+thread first so nothing is sent twice. If it happens repeatedly, run once with
+`linkedin-agent -v run` and share the step log.
+
+## Campaigns and messages
+
+**`campaign check` says `unknown placeholder(s)`**
+A `{name}` that does not exist. The list is in [Writing a campaign](campaigns.md).
+`{custom_x}` needs a column `x` in your CSV.
+
+**`campaign check` warns `nothing varies per person`**
+A message with no placeholder. Add `{first_name}`, `{company}` or `{hook}`; LinkedIn
+filters identical copy and the agent refuses to send the same text twice in a week.
+
+**`identical_body: same text was sent to another lead in the last 7 days`**
+Exactly that. Make the message vary per person.
+
+**`{hook}` always shows the fallback in `preview`**
+The text model is not answering. Check `LINKEDIN_AGENT_TEXT_LLM_MODEL` is a model that
+exists on OpenRouter and the key has credit. The default is `google/gemini-2.5-flash`.
+
+**The message went out with the first character doubled, or as one long line**
+Doubled: the compose field ate a keystroke; the prompt guards against it, tell us if it
+recurs. One long line: you wrote the template with `>` instead of `|`.
+
+**Like and comment were skipped**
+The person has no post in the last 30 days, so they went down the quiet branch. Check
+with `sqlite3 ~/.linkedin-agent/agent.db "SELECT posts FROM leads"`. If they do have
+recent posts and `posts` is `[]`, the visit missed them; run `visit <url>` again.
+
+## Dashboard
+
+**`linkedin-agent ui` prints an address but the page is empty**
+The database is empty or the campaigns folder has no files. Import leads first.
+
+**The dashboard shows a lead as invited although they accepted an hour ago**
+It shows what the agent knows. The next acceptance check will notice. Checks run once a
+day by default.
+
+## Database
+
+**`Error: unable to open database file` with `sqlite3 -readonly`**
+The database is in WAL mode, which read-only mode cannot open without its sidecar file.
+Drop `-readonly`; reading while the agent runs is safe.
+
+**`no such column`**
+The database is upgraded when the agent next opens it. Run any command such as
+`linkedin-agent status` once, then try again.
+
+**Start over completely**
+Stop the run, then:
+
+```bash
+rm ~/.linkedin-agent/agent.db ~/.linkedin-agent/agent.db-wal ~/.linkedin-agent/agent.db-shm
+```
+
+Your login profile and campaign files are untouched.

@@ -1,0 +1,37 @@
+# Today's cloud flow, for side-by-side comparison with `default`:
+# visit -> connect with a note -> wait -> one DM with the booking link.
+
+name: cold-minimal
+agent_name: "Your Name"
+company_name: "Your Company"
+value_proposition: >
+  One or two sentences on what you do and for whom.
+booking_link: ""
+default_timezone: "UTC"
+mode: standard
+quiet_threshold_days: 30
+withdraw_after_days: 21
+review_comments: false
+
+messages:
+  connection_note: "I'd love to connect!"
+  dm: |
+    Hi {first_name}, thanks for connecting! I'm {agent_name} from {company_name}.
+    We help teams like {company} achieve better results.
+    Would you be open to a quick call this week?
+
+    Here's my calendar: {booking_link}
+
+personalization:
+  hook: none
+  hook_fallback: ""
+
+steps:
+  - {id: visit, action: visit, after: 0d, window: any}
+  - {id: connect, action: connect, after: 0d, window: any, params: {note_template: connection_note},
+     on_result: {sent: wait, already_pending: wait, already_connected: dm}}
+  - {id: wait, action: check_connection, after: 1d, window: any,
+     params: {repeat_every: 1d, until_days: 21},
+     on_result: {connected: dm, pending: wait, not_connected: wait, timeout: "end:not_accepted"}}
+  - {id: dm, action: message, after: 2d, window: any, params: {template: dm},
+     on_result: {sent: "end:done"}}
