@@ -597,9 +597,13 @@ async def test_real_reply_after_ours_still_stops_the_sequence(deps, executor):
 async def test_invalid_post_url_is_a_soft_skip_not_a_retry(deps, executor):
     from linkedin_agent.models import PostRef
 
-    bad = PostRef(url="https://www.linkedin.com/in/marisa/", posted_days_ago=1, text="Hiring!")
+    # The model blanks a stored URL that is not a post, so a poisoned *task parameter* is
+    # the case left to guard: one queued directly (enqueue_action, an older database).
+    bad_url = "https://www.linkedin.com/in/marisa/"
+    bad = PostRef(url=bad_url, posted_days_ago=1, text="Hiring!")
+    assert bad.url == ""
     lead, _ = await seed(deps, step="warm.like", branch="posts", posts=[bad])
-    t = await enqueue_step(deps, lead, "warm.like", post_url=bad.url, post_text=bad.text)
+    t = await enqueue_step(deps, lead, "warm.like", post_url=bad_url, post_text=bad.text)
     out = await process_task(t, deps)
     assert out.status == TaskStatus.SKIPPED and out.result.status == "no_content"
     assert "Invalid LinkedIn post URL" in out.result.error
