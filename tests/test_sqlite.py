@@ -56,6 +56,8 @@ async def test_schema_upgrades_a_version_1_database(tmp_path):
     assert (await d.fetchone("SELECT version FROM schema_version"))["version"] == SCHEMA_VERSION
     cols = {r["name"] for r in await d.fetchall("PRAGMA table_info(leads)")}
     assert "prior_reply_text" in cols
+    task_cols = {r["name"] for r in await d.fetchall("PRAGMA table_info(tasks)")}
+    assert "claimed_by" in task_cols
     lead = await SqliteLeadStore(d).get("l1")
     assert lead is not None and lead.prior_reply_text is None
     lead.prior_reply_text = "Thanks Alex"
@@ -105,8 +107,70 @@ async def test_queue_expire_and_requeue_stale(db):
     assert (await q.get(overdue.id)).status == TaskStatus.SKIPPED
     running = await q.claim_next("default", NOW - timedelta(hours=2))
     assert running.id == fine.id
+    # claimed by this very process, which is alive: left alone however old it is
+    assert await q.requeue_stale_running(NOW, older_than_s=1800) == 0
+    assert (await q.get(fine.id)).status == TaskStatus.RUNNING
+    # the claiming process is gone: requeued at once, whatever its age
+    await db.execute("UPDATE tasks SET claimed_by=? WHERE id=?", (_dead_pid(), fine.id))
+    await db.commit()
     assert await q.requeue_stale_running(NOW, older_than_s=1800) == 1
     assert (await q.get(fine.id)).status == TaskStatus.QUEUED
+
+
+def _dead_pid() -> int:
+    """A pid that belonged to a process which has exited."""
+    import subprocess
+
+    proc = subprocess.run(["true"], check=False)
+    return proc.pid if hasattr(proc, "pid") else 2_000_000_000
+
+
+async def test_requeue_uses_age_for_rows_without_a_claimer_and_a_hard_limit(db):
+    """Rows from before schema 3 have no pid: the plain age rule applies. A live pid
+    still gives the task back after the hard limit, in case the pid was reused."""
+    from linkedin_agent.adapters.sqlite.tasks import RUNNING_HARD_LIMIT_S
+
+    q = SqliteTaskQueue(db)
+    legacy, young, ancient = task(), task(), task()
+    for t in (legacy, young, ancient):
+        await q.enqueue(t)
+        assert (await q.claim_next("default", NOW)) is not None
+    await db.execute(
+        "UPDATE tasks SET claimed_by=NULL, started_at=? WHERE id=?",
+        ((NOW - timedelta(hours=1)).isoformat(), legacy.id),
+    )
+    await db.execute(
+        "UPDATE tasks SET started_at=? WHERE id=?",
+        ((NOW - timedelta(minutes=5)).isoformat(), young.id),
+    )
+    await db.execute(
+        "UPDATE tasks SET started_at=? WHERE id=?",
+        ((NOW - timedelta(seconds=RUNNING_HARD_LIMIT_S + 1)).isoformat(), ancient.id),
+    )
+    await db.commit()
+    assert await q.requeue_stale_running(NOW, older_than_s=1800) == 2
+    assert (await q.get(legacy.id)).status == TaskStatus.QUEUED
+    assert (await q.get(young.id)).status == TaskStatus.RUNNING
+    assert (await q.get(ancient.id)).status == TaskStatus.QUEUED
+
+
+async def test_migration_survives_a_column_that_already_exists(tmp_path):
+    """A crash between an ALTER TABLE and the version bump, or a table schema.sql already
+    created in its final shape, must not wedge every later start."""
+    import sqlite3
+
+    path = tmp_path / "half.db"
+    d = await Database(path).open()
+    await d.close()
+    raw = sqlite3.connect(path)
+    raw.execute("UPDATE schema_version SET version=2")  # pretend v3 never got recorded
+    raw.commit()
+    raw.close()
+    d = await Database(path).open()  # re-runs migration 3 against an existing column
+    assert (await d.fetchone("SELECT version FROM schema_version"))["version"] == SCHEMA_VERSION
+    cols = {r["name"] for r in await d.fetchall("PRAGMA table_info(tasks)")}
+    assert "claimed_by" in cols
+    await d.close()
 
 
 async def test_queue_open_tasks_counts_depth_and_body_guard(db):

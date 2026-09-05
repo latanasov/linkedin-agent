@@ -26,6 +26,7 @@ from .campaigns import (
 from .config import Settings
 from .core import messages as msg
 from .core import sequence as seqeng
+from .core.proc import pid_alive
 from .core.prompts import validate_linkedin_url
 from .core.runner import Deps
 from .models import Action, Campaign, LeadRecord, LeadStage, Task, TaskStatus, parse_duration
@@ -99,16 +100,6 @@ def clear_heartbeat(settings: Settings) -> None:
         pass
 
 
-def _pid_alive(pid: int) -> bool:
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        return True
-    return True
-
-
 def run_state(settings: Settings, now: datetime | None = None) -> dict[str, Any]:
     """Is a `linkedin-agent run` loop active on this machine?"""
     now = now or datetime.now(timezone.utc)
@@ -121,7 +112,7 @@ def run_state(settings: Settings, now: datetime | None = None) -> dict[str, Any]
     except (ValueError, KeyError, TypeError):
         return {"active": False, "reason": "heartbeat file unreadable"}
     age = (now - beat).total_seconds()
-    alive = _pid_alive(int(data.get("pid", 0)))
+    alive = pid_alive(int(data.get("pid", 0)))
     active = alive and age < HEARTBEAT_STALE_S
     return {
         "active": active,

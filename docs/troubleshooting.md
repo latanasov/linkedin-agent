@@ -40,9 +40,31 @@ and run `login` again.
 You closed the window before the feed was showing, or LinkedIn asked for a second
 factor you did not complete. Run `login` again and wait for the feed.
 
-**`Session expired — run linkedin-agent login`**
-LinkedIn signed you out. Run `login`, sign in, `run` again. Nothing is lost. This can
-happen after a password change or a security check on LinkedIn's side.
+**`session expired — run linkedin-agent login; waiting for it`**
+LinkedIn signed you out. Run `login` in another terminal and sign in; the run loop stays
+up, notices, prints `login detected; resuming` and carries on with a fresh browser.
+Nothing is lost. This can happen after a password change or a security check on
+LinkedIn's side.
+
+**`A run loop is already active (pid N, since …)`**
+One is running, possibly detached or in another terminal. Only one may run per home:
+two would mean two Chromes on one LinkedIn session. `linkedin-agent stop` ends it, then
+start yours. If `status` says the process is gone but this still appears, the heartbeat
+is a few seconds from expiring; try again.
+
+**`scheduler tick failed: …` or `run loop iteration failed: …`**
+Something unexpected happened in one pass — a locked database, a malformed record. The
+loop logs it, waits half a minute and continues; nothing is lost. After ten in a row it
+stops, on the grounds that the problem needs a person. Run with `-v` for the trace.
+
+**`step 'x' no longer exists in campaign 'mine'`**
+A step id was renamed or removed while a lead was sitting on it. The lead is left where
+it is and everyone else proceeds. Move it: `linkedin-agent restart <lead> --step <id>`.
+
+**`campaign 'mine' reloaded from mine.yaml` / `not reloaded: …`**
+Informational. The loop re-reads edited campaign files within a tick. `not reloaded` means
+the file no longer validates; the last good version stays in use until you fix it — run
+`campaign check mine` to see why.
 
 ## Running
 

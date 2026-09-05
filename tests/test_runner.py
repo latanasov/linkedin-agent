@@ -1,5 +1,7 @@
 from datetime import timedelta
 
+import pytest
+
 from linkedin_agent.core import sequence as seqeng
 from linkedin_agent.core.runner import (
     BREAKER_HOURS,
@@ -716,3 +718,141 @@ async def test_comment_already_posted_is_success_without_second_post(deps, execu
     lead2 = await deps.leads.get(lead.id)
     assert lead2.posts[0].commented is True and lead2.last_touch_at is None
     assert (await deps.leads.get_sequence(lead.id)).step_id == "invite.posts"
+
+
+# ── a loop that is meant to run for weeks ─────────────────────────────────
+
+
+async def test_loop_survives_a_tick_that_raises(deps, executor):
+    lead, _ = await seed(deps)
+    camp = deps.campaigns["test"]
+    await deps.queue.enqueue(seqeng.build_task(camp.step("warm.visit"), lead, camp, "default", NOW))
+    calls = 0
+
+    async def flaky_tick():
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise RuntimeError("database is locked")
+
+    events: list[str] = []
+    n = await run_loop(deps, "default", on_event=events.append, tick=flaky_tick, max_tasks=1)
+    assert n == 1, "the task after the bad tick still ran"
+    assert any("scheduler tick failed: RuntimeError: database is locked" in e for e in events)
+
+
+async def test_loop_survives_an_iteration_that_raises(deps, executor, monkeypatch):
+    import linkedin_agent.core.runner as runner_mod
+
+    lead, _ = await seed(deps)
+    camp = deps.campaigns["test"]
+    for _ in range(2):
+        await deps.queue.enqueue(
+            seqeng.build_task(camp.step("warm.visit"), lead, camp, "default", NOW)
+        )
+    real = runner_mod.process_task
+    blown = False
+
+    async def flaky(task, d):
+        nonlocal blown
+        if not blown:
+            blown = True
+            raise ValueError("unexpected shape from the model")
+        return await real(task, d)
+
+    monkeypatch.setattr(runner_mod, "process_task", flaky)
+    events: list[str] = []
+    n = await run_loop(deps, "default", on_event=events.append, max_tasks=1)
+    assert n == 1
+    assert any("run loop iteration failed: ValueError" in e for e in events)
+    # the task whose iteration blew up is still claimed by this live process; the next
+    # tick's stale-running sweep leaves it alone, and it is requeued once we are gone
+    depth = await deps.queue.depth("default")
+    assert depth["done"] == 1 and depth["running"] == 1
+
+
+async def test_loop_gives_up_after_too_many_consecutive_errors(deps):
+    from linkedin_agent.core.runner import MAX_LOOP_ERRORS
+
+    calls = 0
+
+    async def always_raises():
+        nonlocal calls
+        calls += 1
+        raise RuntimeError("boom")
+
+    events: list[str] = []
+    with pytest.raises(RuntimeError, match="boom"):
+        await run_loop(deps, "default", on_event=events.append, tick=always_raises)
+    assert calls == MAX_LOOP_ERRORS
+    assert any("consecutive errors; stopping" in e for e in events)
+
+
+async def test_sleep_in_the_middle_of_a_task_is_noticed(deps, executor, pool):
+    """The laptop lid closes while the browser is on a profile: no nap is running, so
+    only the wall-vs-monotonic drift can tell. The browser is restarted and the network
+    checked before the next task, exactly as after a nap."""
+    wall = [1_000_000.0]
+    deps.wall = lambda: wall[0]
+    deps.mono = lambda: 5_000.0  # a clock that stands still through a suspend
+
+    def visit_then_suspend(task):
+        wall[0] += 3 * 3600  # three hours pass on the wall clock during the action
+        return {"status": "ok", "headline": "VP"}
+
+    executor.script(Action.VISIT, visit_then_suspend)
+    probes = 0
+
+    async def probe() -> bool:
+        nonlocal probes
+        probes += 1
+        return True
+
+    deps.network_ok = probe
+    lead, _ = await seed(deps)
+    camp = deps.campaigns["test"]
+    await deps.queue.enqueue(seqeng.build_task(camp.step("warm.visit"), lead, camp, "default", NOW))
+    events: list[str] = []
+    n = await run_loop(deps, "default", on_event=events.append, max_tasks=1)
+    assert n == 1
+    assert any("asleep" in e for e in events) and pool.dead is True and probes == 1
+
+
+async def test_loop_waits_through_session_expiry_and_resumes_after_login(deps, executor, pool):
+    acct = await deps.accounts.get("default")
+    acct.session_expired_at = NOW
+    await deps.accounts.save(acct)
+    lead, _ = await seed(deps)
+    camp = deps.campaigns["test"]
+    await deps.queue.enqueue(seqeng.build_task(camp.step("warm.visit"), lead, camp, "default", NOW))
+
+    async def login_happens_elsewhere(_: float) -> None:
+        a = await deps.accounts.get("default")
+        a.session_expired_at = None
+        a.logged_in_at = NOW
+        await deps.accounts.save(a)
+
+    deps.sleep = login_happens_elsewhere
+    events: list[str] = []
+    n = await run_loop(deps, "default", on_event=events.append, max_tasks=1)
+    assert n == 1, "the loop carried on after the login instead of exiting"
+    assert any("waiting for it" in e for e in events)
+    assert any("login detected; resuming" in e for e in events)
+    assert pool.dead is True, "the profile has new cookies: the browser must be reopened"
+
+
+async def test_rate_limited_sequence_task_is_parked_inside_its_window(deps, executor):
+    """Tomorrow 08:00 is not inside the send window; the parked task must wait for it."""
+    from linkedin_agent.core.runner import next_local_day
+    from linkedin_agent.core.timezone import UTC, schedule_in_window
+
+    deps.settings.daily_connect_limit = 1
+    await deps.log.record("default", Action.CONNECT, None, True, "sent", NOW)
+    lead, _ = await seed(deps, step="invite.posts", branch="posts")
+    t = await enqueue_step(deps, lead, "invite.posts", note_template="connection_note")
+    out = await process_task(t, deps)
+    assert out.status == TaskStatus.QUEUED and out.note == "rate_limited"
+    parked = await deps.queue.get(t.id)
+    expected_open, expected_close = schedule_in_window("send", next_local_day(NOW, "UTC"), UTC)
+    assert parked.not_before == expected_open and parked.not_after == expected_close
+    assert executor.calls == []

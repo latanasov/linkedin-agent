@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
+from pathlib import Path
 
 from .core import messages as msg
 from .core import sequence as seqeng
@@ -88,18 +89,76 @@ async def tick(deps: Deps, account: str, now: datetime | None = None) -> TickRep
         return report
 
     allowance = Allowance(deps, account, acct, now)
+    report.notes.extend(refresh_campaigns(deps))
 
     for lead, seq in await deps.leads.due_sequences(now):
         campaign = deps.campaigns.get(seq.campaign)
         if campaign is None:
             report.notes.append(f"{lead.display_name}: campaign {seq.campaign!r} not loaded")
             continue
-        outcome = await _schedule_lead(deps, account, lead, seq, campaign, now, allowance, report)
+        try:
+            outcome = await _schedule_lead(
+                deps, account, lead, seq, campaign, now, allowance, report
+            )
+        except KeyError as e:
+            # The step this lead sits on is gone: the campaign file was edited under it.
+            report.notes.append(
+                f"{lead.display_name}: step {e.args[0]!r} no longer exists in campaign "
+                f"{campaign.name!r}; `linkedin-agent restart <lead> --step <id>` to move it"
+            )
+            continue
+        except Exception as e:  # one lead must not take the tick, or the run, down
+            logger.exception("Scheduling %s failed", lead.display_name)
+            report.notes.append(f"{lead.display_name}: {type(e).__name__}: {str(e)[:120]}")
+            continue
         if outcome == "materialized":
             report.materialized += 1
         elif outcome == "deferred":
             report.deferred += 1
     return report
+
+
+def refresh_campaigns(deps: Deps) -> list[str]:
+    """Pick up edited campaign files without a restart.
+
+    The run loop is meant to stay up for weeks, and people edit messages and delays while
+    it runs, often through an assistant. Every tick compares the campaign files' mtimes
+    with what was loaded; on a change the folder is reloaded and the entries that came
+    from disk are replaced. A file that no longer validates keeps its last good version,
+    with a note, so a half-finished edit cannot stall the people already in it."""
+    from .campaigns import CampaignError, load_campaign
+
+    folder = deps.settings.campaigns_dir
+    seen: dict[str, float] = {}
+    if folder.exists():
+        for path in sorted(folder.glob("*.y*ml")):
+            try:
+                seen[str(path)] = path.stat().st_mtime
+            except OSError:
+                continue
+    if deps.campaign_files is None:  # first tick: remember what build_app loaded
+        deps.campaign_files = seen
+        return []
+    if seen == deps.campaign_files:
+        return []
+    notes: list[str] = []
+    for path_s, mtime in seen.items():
+        if deps.campaign_files.get(path_s) == mtime:
+            continue
+        try:
+            c = load_campaign(Path(path_s))
+        except CampaignError as e:
+            notes.append(f"campaign file {Path(path_s).name} not reloaded: {str(e)[:160]}")
+            continue
+        deps.campaigns[c.name] = c
+        notes.append(f"campaign {c.name!r} reloaded from {Path(path_s).name}")
+    for path_s in set(deps.campaign_files) - set(seen):
+        notes.append(
+            f"campaign file {Path(path_s).name} was removed; its last loaded version stays "
+            "in use until the run restarts"
+        )
+    deps.campaign_files = seen
+    return notes
 
 
 class Allowance:

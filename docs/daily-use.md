@@ -29,9 +29,23 @@ matters more than any setting in this file: an asleep laptop is an agent doing n
 Linux drop `caffeinate -is` and use your own sleep settings.
 
 Then `linkedin-agent status` tells you whether it is up and its pid — it reads a heartbeat
-file, so it works from any terminal, including one an assistant is using. `kill <pid>`
-stops a detached run; there is no `stop` command, and Ctrl-C only reaches a run you can
-see. Follow it with `tail -f ~/.linkedin-agent/run.log`.
+file, so it works from any terminal, including one an assistant is using. Stop it from
+any terminal with:
+
+```bash
+linkedin-agent stop
+```
+
+That asks the loop to finish cleanly: the browser is closed, the task it was on is
+released for the next run, the heartbeat is cleared. `kill <pid>` does the same; the loop
+handles the signal. Follow a detached run with `tail -f ~/.linkedin-agent/run.log`.
+
+Only one loop runs per home. `run` refuses to start while `status` shows one active, so
+you cannot end up with two Chromes on one LinkedIn session by starting it twice.
+
+Campaign files are re-read while the loop runs: an edit to messages, delays or windows is
+picked up within a tick (about five minutes) with a `campaign 'mine' reloaded` line. A file
+that no longer validates is left as it was, with a note, until you fix it.
 
 **If you drive the agent from Claude, Copilot or Cursor, start `run` in your own terminal,
 never by asking the assistant to run it for you.** A process an assistant starts is a child

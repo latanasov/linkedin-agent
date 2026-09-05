@@ -79,13 +79,25 @@ The agent is built for a laptop that sleeps, closes and loses Wi-Fi.
 
 - **State is on disk before anything happens.** Every lead's step, task and result is in
   SQLite. A closed lid or a killed process loses nothing; the next `run` continues. A
-  task left "running" by a killed process is requeued after 30 minutes.
+  task left "running" by a process that is gone is released the moment the next loop
+  looks (each task records the process that claimed it); one a live process is still
+  working on is left alone, however long a slow local model takes.
+- **Stopping is clean.** `linkedin-agent stop`, `kill`, and Ctrl-C all take the same path:
+  the browser is closed, the task in progress is released, the heartbeat is cleared. Only
+  one loop may run per home; `run` refuses while another is active.
+- **One bad pass does not end the run.** An unexpected error in a scheduler tick or a
+  task is logged, the loop backs off and continues. A lead whose campaign step was edited
+  away gets a note; the others proceed. Ten errors in a row and it stops for a person.
+- **An expired session waits rather than exits.** The loop parks until you run `login`
+  from another terminal, then reopens the browser on the refreshed profile and resumes.
 - **Time is wall-clock.** Due steps, windows and timeouts are timestamps, so after a long
   sleep they are simply overdue. A task whose send window passed while asleep is not sent
   at 3 a.m.; it is re-created for the next window.
-- **Waking up is noticed.** When a pause lasts far longer than asked, the loop assumes the
-  machine slept: it restarts the browser, whose connection is stale after sleep, and waits
-  for LinkedIn to answer before claiming anything, up to ten minutes.
+- **Waking up is noticed, wherever it happened.** The loop compares wall-clock time with a
+  clock that stands still during a suspend; a gap means the machine slept, whether in a
+  pause or halfway through a browser action. It restarts the browser, whose connection is
+  stale after sleep, and waits for LinkedIn to answer before claiming anything, up to ten
+  minutes.
 - **Browser failures do not use up a lead's attempts.** A crash, a dead tab or a sleep in
   the middle of an action is retried without counting against the three attempts or the
   breaker. Six such retries on one task and it is marked failed for you to look at.

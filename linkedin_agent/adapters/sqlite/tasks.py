@@ -1,12 +1,18 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+import os
+from datetime import datetime
 from typing import Any
 
 import aiosqlite
 
+from ...core.proc import pid_alive
 from ...models import Action, Task, TaskResult, TaskStatus
 from .db import Database, dumps, iso, loads, parse_dt
+
+# A running task whose claiming process is still alive is left alone this long at most;
+# after that the pid is assumed to have been reused and the task is requeued anyway.
+RUNNING_HARD_LIMIT_S = 24 * 3600
 
 OPEN_STATUSES = (
     TaskStatus.QUEUED.value,
@@ -106,8 +112,9 @@ class SqliteTaskQueue:
                 await self._db.commit()
                 return None
             await self._db.execute(
-                "UPDATE tasks SET status='running', started_at=?, attempts=attempts+1 WHERE id=?",
-                (now_s, row["id"]),
+                """UPDATE tasks SET status='running', started_at=?, attempts=attempts+1,
+                                    claimed_by=? WHERE id=?""",
+                (now_s, os.getpid(), row["id"]),
             )
             await self._db.commit()
         except Exception:
@@ -122,8 +129,9 @@ class SqliteTaskQueue:
     async def claim(self, task_id: str, now: datetime) -> Task | None:
         """Claim one specific queued task (used by one-off commands)."""
         cur = await self._db.execute(
-            "UPDATE tasks SET status='running', started_at=?, attempts=attempts+1 WHERE id=? AND status='queued'",
-            (iso(now), task_id),
+            """UPDATE tasks SET status='running', started_at=?, attempts=attempts+1, claimed_by=?
+               WHERE id=? AND status='queued'""",
+            (iso(now), os.getpid(), task_id),
         )
         await self._db.commit()
         if not cur.rowcount:
@@ -152,10 +160,33 @@ class SqliteTaskQueue:
         return cur.rowcount or 0
 
     async def requeue_stale_running(self, now: datetime, older_than_s: int) -> int:
-        cutoff = iso(now - timedelta(seconds=older_than_s))
+        """Give back tasks that a process claimed and will never finish.
+
+        A task whose claiming process is gone is requeued at once: a killed run loop, a
+        laptop that lost power, a one-off command that was Ctrl-C'd. One whose process is
+        alive is left alone however long it takes (a local model can need an hour), up to
+        a hard limit that guards against a reused pid. Rows without a claiming pid (from
+        before schema 3) fall back to the plain age rule."""
+        rows = await self._db.fetchall(
+            "SELECT id, started_at, claimed_by FROM tasks WHERE status='running'"
+        )
+        stale: list[str] = []
+        for r in rows:
+            started = parse_dt(r["started_at"])
+            age = (now - started).total_seconds() if started else float("inf")
+            pid = r["claimed_by"]
+            if pid is None:
+                if age >= older_than_s:
+                    stale.append(r["id"])
+            elif not pid_alive(int(pid)) or age >= RUNNING_HARD_LIMIT_S:
+                stale.append(r["id"])
+        if not stale:
+            return 0
+        marks = ",".join("?" * len(stale))
         cur = await self._db.execute(
-            "UPDATE tasks SET status='queued', started_at=NULL WHERE status='running' AND started_at<?",
-            (cutoff,),
+            f"""UPDATE tasks SET status='queued', started_at=NULL, claimed_by=NULL
+                WHERE status='running' AND id IN ({marks})""",
+            (*stale,),
         )
         await self._db.commit()
         return cur.rowcount or 0

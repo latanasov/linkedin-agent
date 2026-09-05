@@ -51,6 +51,14 @@ All three checks must pass before a push; CI runs the same three.
   failures give the attempt back and use `_crash_retries` (max 6) instead.
 - `browser_pool.ensure_tab` runs before every task: browser-use 0.11 turns navigation
   into a silent no-op when the session has no focused tab.
+- `run_loop` is built to stay up for weeks: exceptions in a tick or an iteration are
+  logged and survived (`MAX_LOOP_ERRORS` in a row stops it), a suspended machine is
+  detected by wall-vs-monotonic drift (`SleepWatch`), and session expiry waits for
+  `login` instead of exiting. `scheduler.refresh_campaigns` reloads edited campaign
+  files each tick; `tick` isolates a lead whose step id no longer exists.
+- Tasks record the pid that claimed them (schema v3, `claimed_by`);
+  `requeue_stale_running` releases tasks of dead processes at once and leaves live ones
+  alone. `run` refuses to start while the heartbeat shows another loop; `stop` signals it.
 - Login uses a plain, un-automated Chrome subprocess on the profile dir; the same binary
   must run tasks because Chrome encrypts cookies per binary.
 - Schema: `adapters/sqlite/schema.sql` for fresh databases plus `MIGRATIONS` in

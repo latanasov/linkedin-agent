@@ -6,7 +6,9 @@ import asyncio
 import csv
 import logging
 import os
+import signal
 import sys
+import time
 from collections.abc import Awaitable, Callable
 from datetime import datetime, timezone
 from pathlib import Path
@@ -38,6 +40,7 @@ from .core.browser_pool import (
     verify_logged_in,
 )
 from .core.limits import ramp_week
+from .core.proc import pid_alive
 from .core.prompts import LINKEDIN_URL_RE
 from .core.runner import process_task, run_loop
 from .models import Action, LeadStage, Task
@@ -50,6 +53,8 @@ from .service import (
     run_state,
     write_heartbeat,
 )
+
+logger = logging.getLogger(__name__)
 
 app = typer.Typer(help="Standalone local LinkedIn outreach agent.", no_args_is_help=True)
 campaign_app = typer.Typer(help="Manage campaign files.", no_args_is_help=True)
@@ -525,6 +530,14 @@ def run(
                 "Use only with a small test list.",
                 fg=typer.colors.YELLOW,
             )
+        state = run_state(app_.settings, _now())
+        if state["active"] and state.get("pid") != os.getpid():
+            _fail(
+                f"A run loop is already active (pid {state['pid']}, since "
+                f"{str(state.get('started_at') or '')[:16].replace('T', ' ')}). Two loops on "
+                "one profile means two Chromes on one LinkedIn session. Stop it first: "
+                "`linkedin-agent stop`."
+            )
         acct = await deps.accounts.get(name)
         if acct.first_action_at is None:
             _echo("New account: week-1 ramp (25% of caps) is active.")
@@ -548,18 +561,42 @@ def run(
 
         async def heartbeat() -> None:
             while True:
-                write_heartbeat(app_.settings, name, started)
+                try:
+                    write_heartbeat(app_.settings, name, started)
+                except OSError as e:  # a full disk must not silently end the heartbeat
+                    logger.warning("heartbeat not written: %s", e)
                 await asyncio.sleep(HEARTBEAT_EVERY_S)
 
+        # `kill <pid>` and Ctrl-C both land here, so the browser is closed, the heartbeat
+        # cleared and the claimed task released, instead of Chrome being left behind.
+        main = asyncio.current_task()
+        loop = asyncio.get_running_loop()
+        installed: list[signal.Signals] = []
+
+        def _stop(sig: signal.Signals) -> None:
+            emit(f"received {sig.name}; stopping")
+            if main is not None:
+                main.cancel()
+
+        for sig in (signal.SIGTERM, signal.SIGINT):
+            try:
+                loop.add_signal_handler(sig, _stop, sig)
+                installed.append(sig)
+            except (NotImplementedError, RuntimeError):  # Windows, or no event loop signals
+                pass
+
         beat = asyncio.ensure_future(heartbeat())
+        n = 0
         try:
             n = await run_loop(
                 deps, name, once=once, on_event=emit, tick=do_tick, max_tasks=max_tasks
             )
-        except KeyboardInterrupt:
-            n = 0
+        except asyncio.CancelledError:
+            _echo("Stopped.")
         finally:
             beat.cancel()
+            for sig in installed:
+                loop.remove_signal_handler(sig)
             clear_heartbeat(app_.settings)
         _echo(f"Processed {n} task(s).")
 
@@ -567,6 +604,31 @@ def run(
         _run(_with_app(go))
     except KeyboardInterrupt:
         _echo("\nStopped.")
+
+
+@app.command()
+def stop(timeout: float = typer.Option(30.0, help="Seconds to wait for it to exit")) -> None:
+    """Stop the run loop started from any terminal, cleanly: browser closed, task released."""
+    settings = _settings()
+    state = run_state(settings, _now())
+    pid = state.get("pid")
+    if not state["active"] or not pid:
+        _echo("No run loop is active." + (f" ({state['reason']})" if state.get("reason") else ""))
+        return
+    try:
+        os.kill(int(pid), signal.SIGTERM)
+    except ProcessLookupError:
+        clear_heartbeat(settings)
+        _echo(f"Process {pid} was already gone; cleared the stale heartbeat.")
+        return
+    _echo(f"Asked pid {pid} to stop…")
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if not pid_alive(int(pid)):
+            _echo("Stopped.")
+            return
+        time.sleep(0.5)
+    _fail(f"Still running after {timeout:.0f}s. `kill -9 {pid}` if it is stuck.")
 
 
 # ── review / inbox / status / report ──────────────────────────────────────

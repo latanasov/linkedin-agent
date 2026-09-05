@@ -296,4 +296,7 @@ It cannot catch these, so watch for them:
   `linkedin-agent restart <lead> --step <new-id>` for each of them.
 - **`name:` must match the file name**, or `import --campaign` cannot find it.
 
-Editing a campaign affects the people already in it from their next step onward.
+Editing a campaign affects the people already in it from their next step onward. A
+running `run` loop notices the change within a tick, about five minutes, and reloads the
+file — no restart. A file that no longer validates is left as it was, with a note in the
+tick line, so a half-finished edit cannot stall anyone.

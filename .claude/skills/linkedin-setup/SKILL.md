@@ -114,7 +114,8 @@ Tell the user, in this order:
    nohup caffeinate -is linkedin-agent run --headless > ~/.linkedin-agent/run.log 2>&1 &
    ```
 
-   `linkedin-agent status` then shows whether it is up and its pid; `kill <pid>` stops it.
+   `linkedin-agent status` then shows whether it is up and its pid; `linkedin-agent stop`
+   stops it cleanly from any terminal.
 2. `linkedin-agent ui` in a second terminal opens the dashboard.
 3. Replies land in `linkedin-agent inbox`; they answer in LinkedIn and mark them handled.
 4. Optional: `claude mcp add linkedin-agent -- ~/linkedin-agent/.venv/bin/linkedin-agent mcp`
