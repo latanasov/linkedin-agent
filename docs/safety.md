@@ -148,6 +148,7 @@ first four.
 | `TIER` | `pro` | Upper limits: `free`, `pro`, `ultimate`. |
 | `CHROME_PATH` | Playwright Chromium | Path to Chrome. Must not change after login. |
 | `LLM_PROVIDER` | `openrouter` | `openrouter` or `ollama` (local models, no key). See [Local models](local-models.md). |
+| `BROWSER_LLM_PROVIDER` / `TEXT_LLM_PROVIDER` | `LLM_PROVIDER` | Override the provider for one model, e.g. browser on OpenRouter and text on Ollama. |
 | `BROWSER_LLM_MODEL` | `google/gemini-2.5-flash` | The model that reads pages and clicks. An OpenRouter id, or an Ollama tag when the provider is `ollama`. |
 | `TEXT_LLM_MODEL` | `google/gemini-2.5-flash` | Writes hooks and comments. |
 | `OLLAMA_HOST` / `OLLAMA_TIMEOUT_S` | `http://localhost:11434` / `600` | Where Ollama listens and how long one call may take. |

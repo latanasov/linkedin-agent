@@ -248,13 +248,20 @@ def doctor(account: str = typer.Option(None)) -> None:
         line(sys.version_info >= (3, 11), f"python {sys.version.split()[0]}", "install 3.11+")
         env = settings.home / ".env"
         line(env.exists(), f"settings file {env}", "run `linkedin-agent init`")
+        roles = (
+            ("browser", settings.browser_provider, settings.browser_llm_model),
+            ("text", settings.text_provider, settings.text_llm_model),
+        )
+        for which, provider, model in roles:
+            line(True, f"{which} model {model} via {provider}")
         if settings.uses_openrouter:
             line(
                 bool(settings.openrouter_api_key),
                 "OpenRouter API key set",
                 f"paste it into {env} after LINKEDIN_AGENT_OPENROUTER_API_KEY=",
             )
-        else:
+        local = [(which, model) for which, provider, model in roles if provider == "ollama"]
+        if local:
             from .llm import ollama_models
 
             models = await ollama_models(settings.ollama_host)
@@ -263,10 +270,7 @@ def doctor(account: str = typer.Option(None)) -> None:
                 f"Ollama at {settings.ollama_host}",
                 "start Ollama (`ollama serve`)",
             )
-            for which, model in (
-                ("browser", settings.browser_llm_model),
-                ("text", settings.text_llm_model),
-            ):
+            for which, model in local:
                 if models is not None:
                     have = any(m == model or m.split(":")[0] == model.split(":")[0] for m in models)
                     line(have, f"Ollama {which} model {model}", f"`ollama pull {model}`")
@@ -487,10 +491,17 @@ def run(
             )
         if not app_.settings.llm_ready:
             _fail("LINKEDIN_AGENT_OPENROUTER_API_KEY is not set (run `init`).")
-        if not app_.settings.uses_openrouter:
+        local = [
+            f"{which} {model}"
+            for which, provider, model in (
+                ("browser", app_.settings.browser_provider, app_.settings.browser_llm_model),
+                ("text", app_.settings.text_provider, app_.settings.text_llm_model),
+            )
+            if provider == "ollama"
+        ]
+        if local:
             _echo(
-                f"Local models via Ollama at {app_.settings.ollama_host}: browser "
-                f"{app_.settings.browser_llm_model}, text {app_.settings.text_llm_model}."
+                f"Local models via Ollama at {app_.settings.ollama_host}: " + ", ".join(local) + "."
             )
         if app_.settings.fast_test:
             typer.secho(
