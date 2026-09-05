@@ -31,7 +31,10 @@ All three checks must pass before a push; CI runs the same three.
 - Every browser action is a prompt in `linkedin_agent/core/tasks/` that returns JSON only.
   The runner routes on `status` strings; `core/status_map.py` is the single table of
   which statuses mean success, soft skip, or cannot-contact. Add statuses in both places
-  and in `.claude/skills/linkedin-campaign/SKILL.md`.
+  and in `.claude/skills/linkedin-campaign/SKILL.md`. `normalize_status` runs before
+  routing: a status that extends a known one is snapped to it, an unknown one becomes a
+  retryable failure. A status no table knows must never reach `route()`, because an
+  unrouted status stalls the lead with the task marked done.
 - Lead stages only move forward (`_advance_stage`). `scheduler.restart_lead` is the one
   place that lowers a stage on purpose.
 - Three verdicts are verified before they are believed, each because it misfired in a
