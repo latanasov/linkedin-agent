@@ -30,3 +30,18 @@ def test_portable_skill_points_at_the_repository_and_the_inner_skills():
     for name in ("linkedin-setup", "linkedin-outreach", "linkedin-campaign"):
         assert f".claude/skills/{name}/SKILL.md" in text
     assert "Never reply to a prospect" in text
+
+
+def test_every_assistant_entry_point_says_the_run_loop_must_outlive_the_session():
+    """A run started from a tool call dies with the session, mid-action, while the user
+    thinks their campaign is live. Every file an assistant reads has to say so."""
+    files = [
+        ROOT / ".claude" / "skills" / "linkedin-setup" / "SKILL.md",
+        ROOT / ".claude" / "skills" / "linkedin-outreach" / "SKILL.md",
+        ROOT / "skills" / "linkedin-agent" / "SKILL.md",
+        ROOT / ".github" / "copilot-instructions.md",
+    ]
+    for f in files:
+        text = f.read_text()
+        assert "tool call" in text, f
+        assert "nohup" in text, f

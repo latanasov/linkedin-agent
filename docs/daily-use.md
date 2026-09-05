@@ -15,6 +15,29 @@ The agent only acts while `run` is up. A closed laptop pauses everything; the ne
 picks up where it stopped, nothing is lost. For a campaign of hundreds of people, a
 small machine that stays on is worth having.
 
+### Leaving it running without a terminal
+
+`run` is tied to the terminal that started it. Closing that window, or quitting the app it
+lives in, kills the agent. To detach it:
+
+```bash
+nohup caffeinate -is linkedin-agent run --headless > ~/.linkedin-agent/run.log 2>&1 &
+```
+
+`caffeinate -is` is macOS and keeps the machine awake for as long as the agent runs, which
+matters more than any setting in this file: an asleep laptop is an agent doing nothing. On
+Linux drop `caffeinate -is` and use your own sleep settings.
+
+Then `linkedin-agent status` tells you whether it is up and its pid — it reads a heartbeat
+file, so it works from any terminal, including one an assistant is using. `kill <pid>`
+stops a detached run; there is no `stop` command, and Ctrl-C only reaches a run you can
+see. Follow it with `tail -f ~/.linkedin-agent/run.log`.
+
+**If you drive the agent from Claude, Copilot or Cursor, start `run` in your own terminal,
+never by asking the assistant to run it for you.** A process an assistant starts is a child
+of that session and dies when the session ends, mid-action. The skills tell assistants to
+hand you the command instead.
+
 By default the Chrome window the agent drives is visible. Do not close it: the agent
 notices and restarts the browser, but it costs a task. `--headless` hides it, or set
 `LINKEDIN_AGENT_HEADLESS=true` in `~/.linkedin-agent/.env`.

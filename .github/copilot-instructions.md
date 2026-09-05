@@ -17,6 +17,11 @@ Rules that never bend, whatever the task:
 - Never reply to a prospect on the user's behalf. Replies are theirs.
 - Confirm in the conversation before anything reaches LinkedIn (`enqueue_action`,
   starting a run, one-off commands).
+- Never start `linkedin-agent run` from a tool call. It runs for days and your session
+  does not: it would be killed mid-action when the session ends, while the user believes
+  their campaign is live. Hand them the command to paste, detached if they want to close
+  the terminal:
+  `nohup caffeinate -is linkedin-agent run --headless > ~/.linkedin-agent/run.log 2>&1 &`
 - Messages are the user's words; propose, let them approve, save only files that pass
   `campaign check`.
 - Never put the API key, cookies or passwords in the conversation, a printed file, or a
