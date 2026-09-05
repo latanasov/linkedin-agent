@@ -251,3 +251,55 @@ async def test_run_linkedin_agent_passes_timeouts_only_when_set(monkeypatch):
     assert seen["llm_timeout"] == 600
     assert seen["step_timeout"] == 660
     assert seen["max_steps"] == 7
+
+
+def test_unfinished_run_names_the_cause_instead_of_a_formatting_error():
+    from linkedin_agent.core.prompts import unfinished_run
+
+    class History:
+        def is_done(self):
+            return False
+
+        def number_of_steps(self):
+            return 12
+
+        def errors(self):
+            return [None, "Result failed 3/3 times: LLM call timed out after 60 seconds", None]
+
+        def final_result(self):
+            return "Typed 'Working on production evidence for AI agents — would love to connect.'"
+
+    out = unfinished_run(History(), 12)
+    assert out["status"] == "failed"
+    assert out["error"].startswith("agent stopped after 12 of 12 steps without a result")
+    assert "last step error: Result failed 3/3 times: LLM call timed out" in out["error"]
+    assert "last output: Typed 'Working on" in out["error"]
+
+    class Done(History):
+        def is_done(self):
+            return True
+
+    assert unfinished_run(Done(), 12) is None
+    assert unfinished_run('{"status": "ok"}', 12) is None, "plain strings have no history API"
+
+
+def test_unfinished_run_with_a_timeout_classifies_as_a_crash():
+    from linkedin_agent.core.errors import classify_result
+    from linkedin_agent.core.prompts import unfinished_run
+    from linkedin_agent.models import ErrorKind, TaskResult
+
+    class History:
+        def is_done(self):
+            return False
+
+        def number_of_steps(self):
+            return 8
+
+        def errors(self):
+            return ["Event handler on_SwitchTabEvent timed out after 10s"]
+
+        def final_result(self):
+            return ""
+
+    r = TaskResult.from_raw(unfinished_run(History(), 12))
+    assert classify_result(r) is ErrorKind.CRASH, "a slow browser is not the lead's fault"

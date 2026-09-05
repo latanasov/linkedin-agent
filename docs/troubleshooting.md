@@ -152,6 +152,15 @@ slow: a step that needs ten minutes is not usable either. Try a smaller,
 non-reasoning model, or keep the browser on OpenRouter. See
 [Local models](local-models.md).
 
+**`agent stopped after N of M steps without a result`**
+The browser model used its whole step budget, or failed too many steps in a row, and
+never reported an outcome. The line names the last step error — a timeout means the
+browser or the model was slow, and the task is retried as a browser problem without
+counting against the lead or the breaker; anything else counts as an ordinary failure
+and is retried up to three times. The retry is safe: a connect that did go out reads as
+`already_pending`, a message as `already_sent`. If one action hits this repeatedly, run
+once with `-v` and share the step log.
+
 **`send_button_not_found`**
 The model could not find LinkedIn's Send button. It is retried; the retry checks the
 thread first so nothing is sent twice. If it happens repeatedly, run once with
