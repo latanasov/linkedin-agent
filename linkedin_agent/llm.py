@@ -52,7 +52,7 @@ OpenRouterTextLLM = ChatCompletionsTextLLM
 
 
 def make_text_llm(settings: Settings) -> ChatCompletionsTextLLM:
-    if settings.uses_openrouter:
+    if settings.text_provider == "openrouter":
         if not settings.openrouter_api_key:
             raise ValueError("LINKEDIN_AGENT_OPENROUTER_API_KEY is not set")
         return ChatCompletionsTextLLM(
@@ -71,7 +71,7 @@ def make_text_llm(settings: Settings) -> ChatCompletionsTextLLM:
 
 def make_browser_llm(settings: Settings) -> Any:
     """browser-use model. Imported lazily so tests never need browser_use."""
-    if settings.uses_openrouter:
+    if settings.browser_provider == "openrouter":
         from browser_use.llm.openrouter.chat import ChatOpenRouter
 
         if not settings.openrouter_api_key:

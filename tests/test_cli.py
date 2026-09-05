@@ -330,3 +330,24 @@ def test_doctor_checks_ollama_when_it_is_the_provider(home, fakes, monkeypatch, 
     # the model loop must not shadow the account name: login and profile still use "default"
     assert "profiles/default" in r.output
     assert "profiles/gemma4" not in r.output and "profiles/qwen3.5" not in r.output
+
+
+def test_doctor_checks_each_role_where_it_runs(home, fakes, monkeypatch, tmp_path):
+    """Browser on OpenRouter, text on Ollama: the key is required and only the text model
+    has to be pulled."""
+    monkeypatch.setenv("LINKEDIN_AGENT_LLM_PROVIDER", "ollama")
+    monkeypatch.setenv("LINKEDIN_AGENT_BROWSER_LLM_PROVIDER", "openrouter")
+    monkeypatch.setenv("LINKEDIN_AGENT_BROWSER_LLM_MODEL", "google/gemini-2.5-flash")
+    monkeypatch.setenv("LINKEDIN_AGENT_TEXT_LLM_MODEL", "gemma4:12b")
+    monkeypatch.setattr(cli, "resolve_chrome_executable", _async(lambda s: tmp_path / "chrome"))
+
+    async def fake_models(host, timeout=5.0):
+        return ["gemma4:12b"]
+
+    monkeypatch.setattr("linkedin_agent.llm.ollama_models", fake_models)
+    r = runner.invoke(cli.app, ["doctor"])
+    assert "browser model google/gemini-2.5-flash via openrouter" in r.output
+    assert "text model gemma4:12b via ollama" in r.output
+    assert "OpenRouter API key set" in r.output
+    assert "ok   Ollama text model gemma4:12b" in r.output
+    assert "Ollama browser model" not in r.output

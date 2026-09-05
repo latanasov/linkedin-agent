@@ -20,6 +20,20 @@ LINKEDIN_AGENT_BROWSER_LLM_MODEL=qwen3.5:35b
 LINKEDIN_AGENT_TEXT_LLM_MODEL=gemma4:12b
 ```
 
+The two roles can run in different places, which is usually what you want (see below).
+`LINKEDIN_AGENT_BROWSER_LLM_PROVIDER` and `LINKEDIN_AGENT_TEXT_LLM_PROVIDER` override the
+provider for one model each:
+
+```
+LINKEDIN_AGENT_LLM_PROVIDER=ollama
+LINKEDIN_AGENT_BROWSER_LLM_PROVIDER=openrouter
+LINKEDIN_AGENT_BROWSER_LLM_MODEL=google/gemini-2.5-flash
+LINKEDIN_AGENT_TEXT_LLM_MODEL=gemma4:12b
+```
+
+`doctor` prints where each model runs and only checks what applies: the key when either
+role is on OpenRouter, and a pull for each role that is on Ollama.
+
 The OpenRouter key is not needed in this mode. `LINKEDIN_AGENT_OLLAMA_HOST` changes the
 address (default `http://localhost:11434`) and `LINKEDIN_AGENT_OLLAMA_TIMEOUT_S` the
 per-call timeout (default 600, because a 40,000-token prompt can take minutes). On the
@@ -109,9 +123,32 @@ Look for three numbers in the output:
 
 Then repeat with Flash for the same two people to compare. If the local model is within
 about three times Flash's time and gets both answers right on five profiles in a row, it
-is good enough for a fast test on a friend, and after that for a campaign. If not, keep
-Flash for the browser and go local for the text model only; the browser model is nearly
-all of the bill anyway, so that combination costs almost the same as fully local.
+is good enough for a fast test on a friend, and after that for a campaign.
+
+If not, keep the browser on OpenRouter and move only the text model local. Be clear-eyed
+about what that saves: the browser model is nearly the whole bill, so this is a privacy
+and quality choice, not a cost one — it costs about what running everything on OpenRouter
+costs. Going fully local is the only setup that removes the bill, and only if the browser
+model clears the bar above.
+
+### One measurement, for calibration
+
+On an M4 Pro with 48 GB, a 30B reasoning model reading this exact `visit` prompt:
+
+| | Muse Glimmer 30B (local) | Gemini 2.5 Flash |
+|---|---|---|
+| Steps used | 2 of 8 | 3 to 5 |
+| Seconds per step | 245 and 286 | a few |
+| Whole action | 10 min 29 s | well under a minute |
+| Header fields | correct | correct |
+| About and posts | missing — never scrolled | present |
+
+Comprehension was not the problem: two steps, valid JSON both times, no scroll loops, the
+right name, headline, title, company, location and connection degree. Throughput was: a
+40,000-token page takes it four minutes to read. And note the last row — it answered
+without doing step 4 of the prompt, so `posts: []` meant "did not look", which would send
+that person down the `quiet` branch. A model that is merely slow is survivable; a model
+that skips a step and reports confidently is not.
 
 ## What would make local models much better
 

@@ -102,3 +102,29 @@ def test_browser_timeouts_can_be_set_explicitly():
         None,
         900,
     )
+
+
+def test_provider_can_differ_per_role():
+    """The browser model is the demanding one, so "Flash for the browser, Ollama for the
+    text" has to be expressible."""
+    s = _settings(llm_provider="ollama", browser_llm_provider="openrouter", openrouter_api_key="k")
+    assert s.browser_provider == "openrouter"
+    assert s.text_provider == "ollama"
+    assert s.uses_openrouter is True
+    assert s.llm_ready is True
+    # Only the browser role decides the browser agent's time budget.
+    assert s.browser_timeouts == (None, None)
+
+    s = _settings(llm_provider="ollama", browser_llm_provider="openrouter")
+    assert s.llm_ready is False, "a role on OpenRouter still needs the key"
+
+    both_local = _settings(llm_provider="ollama")
+    assert both_local.uses_openrouter is False
+    assert both_local.llm_ready is True
+
+
+def test_factories_follow_the_per_role_provider(monkeypatch):
+    s = _settings(llm_provider="ollama", text_llm_provider="openrouter", openrouter_api_key="k")
+    assert make_text_llm(s)._url == OPENROUTER_URL
+    s = _settings(llm_provider="openrouter", text_llm_provider="ollama", openrouter_api_key="k")
+    assert make_text_llm(s)._url.startswith("http://localhost:11434")

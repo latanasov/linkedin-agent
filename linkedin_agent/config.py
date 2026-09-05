@@ -26,6 +26,11 @@ class Settings(BaseSettings):
     # through Ollama at ollama_host and needs no key. Model names then follow Ollama's
     # naming (e.g. "qwen3.5:35b").
     llm_provider: Literal["openrouter", "ollama"] = "openrouter"
+    # Per-role overrides. The browser model is the expensive, demanding one and the text
+    # model is easy, so "browser on OpenRouter, text on Ollama" is a sensible mix; unset,
+    # both follow llm_provider.
+    browser_llm_provider: Literal["openrouter", "ollama"] | None = None
+    text_llm_provider: Literal["openrouter", "ollama"] | None = None
     ollama_host: str = "http://localhost:11434"
     ollama_timeout_s: int = 600  # local prompts of 40k tokens can take minutes per step
     # Per-model-call and per-step budgets for the browser model. None means browser-use
@@ -59,11 +64,20 @@ class Settings(BaseSettings):
 
     @property
     def uses_openrouter(self) -> bool:
-        return self.llm_provider == "openrouter"
+        """True when either model goes through OpenRouter."""
+        return "openrouter" in (self.browser_provider, self.text_provider)
+
+    @property
+    def browser_provider(self) -> str:
+        return self.browser_llm_provider or self.llm_provider
+
+    @property
+    def text_provider(self) -> str:
+        return self.text_llm_provider or self.llm_provider
 
     @property
     def llm_ready(self) -> bool:
-        """True when the configured provider has what it needs to be called."""
+        """True when every configured provider has what it needs to be called."""
         return bool(self.openrouter_api_key) if self.uses_openrouter else True
 
     @property
@@ -75,7 +89,7 @@ class Settings(BaseSettings):
         if self.browser_llm_timeout_s is not None or self.browser_step_timeout_s is not None:
             llm_t = self.browser_llm_timeout_s
             return llm_t, self.browser_step_timeout_s or (llm_t + 60 if llm_t else None)
-        if self.uses_openrouter:
+        if self.browser_provider == "openrouter":
             return None, None
         return self.ollama_timeout_s, self.ollama_timeout_s + 60
 

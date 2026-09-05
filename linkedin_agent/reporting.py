@@ -56,6 +56,17 @@ async def account_health(deps: Deps, account: str, now: datetime) -> dict[str, A
         "governor": acct.governor_state.value,
         "ramp_week": ramp_week(age),
         "account_age_days": age,
+        "models": models_in_use(deps.settings),
+    }
+
+
+def models_in_use(settings: Any) -> dict[str, str]:
+    """Which model drives the browser and which writes text, and where each runs.
+
+    Reported so a mix-up ("why is this so slow?") is visible without opening .env."""
+    return {
+        "browser": f"{settings.browser_llm_model} ({settings.browser_provider})",
+        "text": f"{settings.text_llm_model} ({settings.text_provider})",
     }
 
 
