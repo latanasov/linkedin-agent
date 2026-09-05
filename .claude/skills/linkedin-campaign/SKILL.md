@@ -21,7 +21,8 @@ implementations. Read `default.yaml` before writing anything from scratch.
    or InMail credits (decides `standard` vs `inmail`), and how aggressive the user wants
    to be (warm-up or not, how many follow-ups).
 2. **Start from a built-in.** `linkedin-agent campaign new <name>` copies `default.yaml`;
-   `--template inmail` or `--template cold-minimal` copies the others. Edit, do not
+   `--template inmail`, `--template cold-minimal` or `--template three-week` copies the
+   others. Edit, do not
    rewrite: the step ids and routing in the built-ins are known good.
 3. **Write the messages in the user's voice.** The agent never writes a DM. Templates
    are the user's words with placeholders; the model contributes at most the `{hook}`
@@ -248,6 +249,19 @@ are InMails too, no wait loop.
 
 **No warm-up, one message** (`cold-minimal.yaml`): visit → connect → wait → one DM.
 Worst reply rates, fastest to run. Use only for a small, warm list.
+
+**A cohort finished inside three weeks** (`three-week.yaml`): the default playbook fitted
+to a deadline. A four-day warm-up, its own `invite` (Tue–Fri) and `followup` (Mon–Fri)
+windows so no step waits out a weekend, `repeat_every: 2d` with `until_days: 8` on the
+acceptance check, and 3/3/3-day reply gaps. Reach for it when the user says "three weeks"
+or wants back-to-back cohorts they can measure.
+
+Size the cohort to the ramp, and say the number out loud rather than letting them import
+a list that cannot fit. Invites available in three weeks are the daily connect cap times
+three send days (or four with this template's `invite` window), summed over the ramp:
+about 75 on a new account, about 180 at week 5. Import no more than two thirds of that —
+the last week needs room for messages, not only invites — so 60 is a sensible first
+cohort. Whatever they ask for, the arithmetic is the answer, not the ambition.
 
 **Comment approval:** set `review_comments: true`; nothing else changes. Comments park
 in `linkedin-agent review`; the sequence waits on them.

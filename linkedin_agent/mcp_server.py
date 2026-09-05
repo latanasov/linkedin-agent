@@ -216,7 +216,8 @@ def build_server(app: App) -> MCPServer:
     @guarded
     async def get_campaign(name: str) -> Any:
         """A campaign's full YAML text, its parsed steps with routing, and the checker's
-        errors and warnings. Built-ins (default, inmail, cold-minimal) can be read too."""
+        errors and warnings. Built-ins (default, inmail, cold-minimal, three-week) can be
+        read too."""
         return svc.campaign_get(name)
 
     @server.tool(name="check_campaign")
@@ -237,7 +238,8 @@ def build_server(app: App) -> MCPServer:
     @server.tool(name="new_campaign")
     @guarded
     async def new_campaign(name: str, template: str = "default") -> Any:
-        """Create a campaign file from a built-in template (default, inmail, cold-minimal)
+        """Create a campaign file from a built-in template (default, inmail, cold-minimal,
+        three-week)
         and return it for editing. Fails if the name already exists."""
         return svc.campaign_new(name, template)
 
