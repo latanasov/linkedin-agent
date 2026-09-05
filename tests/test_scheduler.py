@@ -351,3 +351,24 @@ async def test_tick_reloads_campaign_files_that_change_on_disk(deps, tmp_path):
     assert any("was removed" in n for n in rep.notes) and "mine" in deps.campaigns
     # the fixture's in-memory campaign never came from disk and is never touched
     assert deps.campaigns["test"].agent_name == "Alex"
+
+
+async def test_tick_likes_via_the_activity_feed_when_the_stored_post_url_is_poisoned(deps):
+    """Before the fix this became a task that failed prompt validation and skipped the
+    step with no_content; now the URL is blank and the prompt uses the activity feed."""
+    from linkedin_agent.core.tasks import build_prompt
+    from linkedin_agent.models import PostRef
+
+    url = "https://www.linkedin.com/in/marisa-rubio-0b1916/"
+    lead = await add_lead(
+        deps,
+        step="warm.like",
+        branch="posts",
+        linkedin_url=url,
+        posts=[PostRef(url=url, text="Great quarter for the team.", posted_days_ago=2)],
+    )
+    rep = await tick(deps, "default", NOW)
+    assert rep.materialized == 1 and rep.skipped_steps == 0
+    task = await deps.queue.open_task_for(lead.id, "warm.like")
+    assert task is not None and task.params["post_url"] == ""
+    build_prompt(task.action, task.profile_url, task.params)  # must not raise
