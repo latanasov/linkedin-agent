@@ -40,7 +40,8 @@ CREATE TABLE IF NOT EXISTS tasks (
   body_hash TEXT,
   result TEXT,
   created_at TEXT NOT NULL,
-  started_at TEXT, finished_at TEXT
+  started_at TEXT, finished_at TEXT,
+  claimed_by INTEGER
 );
 CREATE INDEX IF NOT EXISTS tasks_pick ON tasks(account, status, not_before, created_at);
 CREATE INDEX IF NOT EXISTS tasks_lead_step ON tasks(lead_id, step_id, status);

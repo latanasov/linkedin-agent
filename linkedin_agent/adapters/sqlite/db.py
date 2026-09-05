@@ -3,18 +3,23 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 import aiosqlite
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 # Incremental changes for databases created at an older version. schema.sql always
 # describes the current shape for fresh databases; these bring existing ones up to it.
 MIGRATIONS: dict[int, tuple[str, ...]] = {
     2: ("ALTER TABLE leads ADD COLUMN prior_reply_text TEXT",),
+    # Which process claimed a running task, so a task left behind by a dead process is
+    # requeued at once instead of after a fixed wait, and one a live process is still
+    # working on is left alone however long it takes.
+    3: ("ALTER TABLE tasks ADD COLUMN claimed_by INTEGER",),
 }
 _SCHEMA_PATH = Path(__file__).with_name("schema.sql")
 
@@ -63,9 +68,12 @@ class Database:
     async def open(self) -> Database:
         if self.path != ":memory:":
             Path(self.path).parent.mkdir(parents=True, exist_ok=True)
-        self._conn = await aiosqlite.connect(self.path)
+        # Several processes share this file (run loop, dashboard, MCP server, one-off
+        # commands); wait for a writer rather than fail a weeks-long run on a lock.
+        self._conn = await aiosqlite.connect(self.path, timeout=30)
         self._conn.row_factory = aiosqlite.Row
         await self._conn.execute("PRAGMA journal_mode=WAL")
+        await self._conn.execute("PRAGMA busy_timeout=30000")
         await self._conn.execute("PRAGMA foreign_keys=ON")
         await self.migrate()
         return self
@@ -88,7 +96,15 @@ class Database:
         current = int(row[0])
         for version in range(current + 1, SCHEMA_VERSION + 1):
             for statement in MIGRATIONS.get(version, ()):
-                await self.conn.execute(statement)
+                try:
+                    await self.conn.execute(statement)
+                except sqlite3.OperationalError as e:
+                    # Already applied: schema.sql created the table in its current shape
+                    # (a database that predates the table), or a previous run crashed
+                    # between this statement and the version bump. Either way, the
+                    # column is there and the migration must not wedge every later start.
+                    if "duplicate column" not in str(e).lower():
+                        raise
             await self.conn.execute("UPDATE schema_version SET version=?", (version,))
         await self.conn.commit()
 

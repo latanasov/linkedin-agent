@@ -40,7 +40,7 @@ from .errors import classify_error, classify_result
 from .limits import account_age_days, effective_cap, remaining
 from .status_map import apply_result, is_success, normalize_reply_check
 from .tasks import build_prompt
-from .timezone import resolve_tz
+from .timezone import resolve_tz, schedule_in_window
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +56,11 @@ NETWORK_WAIT_MAX_S = 600.0
 NETWORK_PROBE_EVERY_S = 15.0
 RETRY_DELAY = timedelta(minutes=10)
 IDENTICAL_WINDOW = timedelta(days=7)
+# The loop is meant to run for weeks. An unexpected exception in one iteration is logged
+# and the loop backs off and continues; only this many in a row means something is
+# systematically broken and it is better to stop than to spin.
+MAX_LOOP_ERRORS = 10
+LOOP_ERROR_BACKOFF_S = 30.0
 
 
 def utcnow() -> datetime:
@@ -78,6 +83,12 @@ class Deps:
     rng: random.Random = field(default_factory=random.Random)
     sleep: Callable[[float], Any] = asyncio.sleep
     wall: Callable[[], float] = time.time
+    # Monotonic time does not advance while the machine is suspended; wall time does. The
+    # difference between the two is how long the laptop slept, wherever in the loop it
+    # happened, including in the middle of a browser action.
+    mono: Callable[[], float] = time.monotonic
+    # Campaign file mtimes as of the last tick; None until the first tick records them.
+    campaign_files: dict[str, float] | None = None
     network_ok: Callable[[], Awaitable[bool]] | None = None  # default: probe linkedin.com
 
 
@@ -206,16 +217,29 @@ async def process_task(task: Task, deps: Deps) -> Outcome:
     if acct.tripped_until and acct.tripped_until > now:
         return await _park(task, deps, f"circuit_breaker: {acct.trip_reason}", acct.tripped_until)
 
+    lead = await deps.leads.get(task.lead_id) if task.lead_id else None
+    campaign = deps.campaigns.get(lead.campaign) if lead else None
+
     # 2. caps (read-only checks are not capped by the governor but still counted)
     day_count, week_count = await usage(deps, account, task.action, now)
     if remaining(day_count, week_count, caps_for(deps, acct, task.action, now)) <= 0:
-        return await _park(
-            task, deps, "rate_limited", next_local_day(now, deps.settings.default_timezone)
-        )
+        until = next_local_day(now, deps.settings.default_timezone)
+        not_after: datetime | None = None
+        if lead and campaign and task.step_id:
+            # Tomorrow 08:00 may be a Saturday or before the window opens; put the task
+            # back inside its step's window from then, rather than letting it run at the
+            # first moment the cap resets.
+            try:
+                step = campaign.step(task.step_id)
+                tz = resolve_tz(lead.timezone, campaign.default_timezone)
+                until, not_after = schedule_in_window(
+                    step.window, until, tz, campaign.window_specs or None
+                )
+            except (KeyError, RuntimeError, ValueError):
+                pass
+        return await _park(task, deps, "rate_limited", until, not_after=not_after)
 
     # 3. lead, campaign, content
-    lead = await deps.leads.get(task.lead_id) if task.lead_id else None
-    campaign = deps.campaigns.get(lead.campaign) if lead else None
     if lead and lead.stage == LeadStage.PAUSED:
         return await _finish(task, deps, TaskStatus.SKIPPED, TaskResult(status="lead_paused"))
     try:
@@ -502,7 +526,12 @@ async def _advance_sequence(
 
 
 async def _park(
-    task: Task, deps: Deps, reason: str, until: datetime | None, stop: bool = False
+    task: Task,
+    deps: Deps,
+    reason: str,
+    until: datetime | None,
+    stop: bool = False,
+    not_after: datetime | None = None,
 ) -> Outcome:
     """Put the task back in the queue for later without counting an attempt."""
     task.status = TaskStatus.QUEUED
@@ -510,7 +539,9 @@ async def _park(
     task.started_at = None
     if until is not None:
         task.not_before = until
-        if task.not_after is not None and task.not_after <= until:
+        if not_after is not None:
+            task.not_after = not_after
+        elif task.not_after is not None and task.not_after <= until:
             task.not_after = None  # the scheduler re-windows it; better late than lost
     await deps.queue.update(task)
     return Outcome(status=TaskStatus.QUEUED, note=reason, stop=stop, parked_until=until)
@@ -629,6 +660,26 @@ def tick_interval(deps: Deps) -> int:
     )
 
 
+class SleepWatch:
+    """How long the machine was suspended since the last look.
+
+    Wall-clock time keeps running through a suspend; monotonic time does not (macOS and
+    Linux). The drift between the two since the last call is time spent asleep, wherever
+    in the loop the suspend happened — a pacing nap, a scheduler tick, or halfway through
+    a browser action."""
+
+    def __init__(self, deps: Deps) -> None:
+        self._deps = deps
+        self._wall = deps.wall()
+        self._mono = deps.mono()
+
+    def slept(self) -> float:
+        wall, mono = self._deps.wall(), self._deps.mono()
+        drift = (wall - self._wall) - (mono - self._mono)
+        self._wall, self._mono = wall, mono
+        return max(0.0, drift)
+
+
 async def run_loop(
     deps: Deps,
     account: str,
@@ -641,22 +692,32 @@ async def run_loop(
     """Claim and process tasks until the queue is drained (once=True) or forever.
 
     `tick` is the scheduler callback (materialise due steps); it is called at start and
-    every settings.tick_interval_s. Returns the number of tasks processed."""
+    every settings.tick_interval_s. Returns the number of tasks processed.
+
+    Built to be left running: one bad iteration is logged and survived, a suspended
+    laptop is noticed wherever it happened, and an expired session waits for `login`
+    instead of ending the run."""
     emit = on_event or (lambda s: None)
     processed = 0
     last_tick = 0.0
-    idle_since = deps.clock()
     loop = asyncio.get_event_loop()
+    watch = SleepWatch(deps)
+    loop_errors = 0
+    session_announced = False
+
+    async def woke(gap: float) -> None:
+        nonlocal last_tick
+        await _after_wake(deps, gap, emit)
+        last_tick = 0.0  # the world moved on: reschedule immediately
 
     async def nap(seconds: float) -> None:
         """Sleep, and notice if the machine slept far longer than asked."""
         before = deps.wall()
         await deps.sleep(seconds)
-        gap = deps.wall() - before - seconds
+        overshoot = deps.wall() - before - seconds
+        gap = max(overshoot, watch.slept())
         if gap > WAKE_GAP_S:
-            await _after_wake(deps, gap, emit)
-            nonlocal last_tick
-            last_tick = 0.0  # the world moved on: reschedule immediately
+            await woke(gap)
 
     async def do_tick() -> None:
         nonlocal last_tick
@@ -664,43 +725,85 @@ async def run_loop(
             await tick()
         last_tick = loop.time()
 
-    await do_tick()
+    async def survive(what: str, exc: Exception) -> bool:
+        """Log an unexpected failure; True to carry on, False when it is time to stop."""
+        nonlocal loop_errors
+        loop_errors += 1
+        logger.exception("%s failed (%d/%d in a row)", what, loop_errors, MAX_LOOP_ERRORS)
+        emit(f"{what} failed: {type(exc).__name__}: {str(exc)[:160]}")
+        if loop_errors >= MAX_LOOP_ERRORS or once:
+            emit(f"{loop_errors} consecutive errors; stopping so the problem gets looked at")
+            return False
+        await nap(LOOP_ERROR_BACKOFF_S * min(loop_errors, 4))
+        return True
+
+    try:
+        await do_tick()
+    except Exception as e:
+        if not await survive("scheduler tick", e):
+            raise
     while True:
         now = deps.clock()
         if max_tasks is not None and processed >= max_tasks:
             break
         if tick is not None and loop.time() - last_tick >= tick_interval(deps):
-            await do_tick()
-        acct = await deps.accounts.get(account)
-        if acct.session_expired_at:
-            emit("session expired — run `linkedin-agent login`")
-            break
-        if acct.tripped_until and acct.tripped_until > now:
-            wait = min((acct.tripped_until - now).total_seconds(), deps.settings.tick_interval_s)
-            emit(
-                "circuit breaker tripped until "
-                f"{acct.tripped_until.isoformat(timespec='minutes')}: {acct.trip_reason}"
-            )
-            if once:
+            try:
+                await do_tick()
+            except Exception as e:
+                if not await survive("scheduler tick", e):
+                    raise
+                continue
+        try:
+            acct = await deps.accounts.get(account)
+            if acct.session_expired_at:
+                # `login` clears this from another process. Wait for it: a detached run
+                # that exited here would stay down long after the user signed back in.
+                if once:
+                    emit("session expired — run `linkedin-agent login`")
+                    break
+                if not session_announced:
+                    emit("session expired — run `linkedin-agent login`; waiting for it")
+                    session_announced = True
+                await nap(tick_interval(deps))
+                continue
+            if session_announced:
+                session_announced = False
+                deps.pool.mark_browser_dead()  # the profile has new cookies; reopen it
+                emit("login detected; resuming")
+            if acct.tripped_until and acct.tripped_until > now:
+                wait = min(
+                    (acct.tripped_until - now).total_seconds(), deps.settings.tick_interval_s
+                )
+                emit(
+                    "circuit breaker tripped until "
+                    f"{acct.tripped_until.isoformat(timespec='minutes')}: {acct.trip_reason}"
+                )
+                if once:
+                    break
+                await nap(max(1.0, wait))
+                continue
+            task = await deps.queue.claim_next(account, now)
+            if task is None:
+                if once:
+                    break
+                await deps.pool.maybe_close_idle(deps.settings.idle_browser_timeout_s)
+                await nap(min(25, tick_interval(deps)))
+                continue
+            outcome = await process_task(task, deps)
+            processed += 1
+            loop_errors = 0
+            emit(_format(task, outcome))
+            # A suspend in the middle of the action shows up here, not in a nap.
+            gap = watch.slept()
+            if gap > WAKE_GAP_S:
+                await woke(gap)
+            if outcome.stop and once:
                 break
-            await nap(max(1.0, wait))
-            continue
-        task = await deps.queue.claim_next(account, now)
-        if task is None:
-            if once:
-                break
-            await deps.pool.maybe_close_idle(deps.settings.idle_browser_timeout_s)
-            await nap(min(25, tick_interval(deps)))
-            continue
-        idle_since = now
-        outcome = await process_task(task, deps)
-        processed += 1
-        emit(_format(task, outcome))
-        if outcome.stop:
-            break
-        if outcome.status in (TaskStatus.DONE, TaskStatus.FAILED):
-            await nap(pacing_delay(deps, task.action))
-    del idle_since
+            if outcome.status in (TaskStatus.DONE, TaskStatus.FAILED):
+                await nap(pacing_delay(deps, task.action))
+        except Exception as e:
+            if not await survive("run loop iteration", e):
+                raise
     return processed
 
 

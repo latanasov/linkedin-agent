@@ -295,3 +295,59 @@ async def test_restart_creates_sequence_when_lead_has_none(deps):
     seq = await deps.leads.get_sequence(lead.id)
     assert seq is not None and seq.step_id == "post.m1"
     assert (await deps.leads.get(lead.id)).stage == LeadStage.CONNECTED
+
+
+# ── the tick survives one bad lead and notices edited campaign files ──────
+
+
+async def test_tick_isolates_a_lead_whose_step_was_renamed(deps):
+    """A step id edited out from under a lead used to raise KeyError and take the whole
+    tick, and with it the run, down. Now that lead gets a note and the others proceed."""
+    stuck = await add_lead(
+        deps, step="gone.step", linkedin_url="https://www.linkedin.com/in/stuck/"
+    )
+    fine = await add_lead(deps, posts=[], linkedin_url="https://www.linkedin.com/in/fine/")
+    rep = await tick(deps, "default", NOW)
+    assert rep.materialized == 1
+    assert any("gone.step" in n and "no longer exists" in n for n in rep.notes)
+    assert await deps.queue.open_task_for(fine.id, "warm.visit") is not None
+    assert await deps.queue.open_task_for(stuck.id, "gone.step") is None
+
+
+async def test_tick_reloads_campaign_files_that_change_on_disk(deps, tmp_path):
+    import os
+
+    from linkedin_agent.campaigns import BUILTIN_DIR
+
+    folder = deps.settings.campaigns_dir
+    folder.mkdir(parents=True, exist_ok=True)
+    path = folder / "mine.yaml"
+    text = (BUILTIN_DIR / "default.yaml").read_text().replace("name: default", "name: mine")
+    path.write_text(text)
+
+    rep = await tick(deps, "default", NOW)  # first tick only records what is on disk
+    assert rep.notes == [] and "mine" not in deps.campaigns
+
+    stamp = path.stat().st_mtime + 10
+    os.utime(path, (stamp, stamp))
+    rep = await tick(deps, "default", NOW)
+    assert any("'mine' reloaded" in n for n in rep.notes)
+    assert deps.campaigns["mine"].agent_name == "Your Name"
+
+    path.write_text(text.replace('agent_name: "Your Name"', 'agent_name: "Alex"'))
+    os.utime(path, (stamp + 10, stamp + 10))
+    rep = await tick(deps, "default", NOW)
+    assert deps.campaigns["mine"].agent_name == "Alex"
+
+    # a half-finished edit does not validate: the last good version stays in use
+    path.write_text("name: mine\nsteps: []\n")
+    os.utime(path, (stamp + 20, stamp + 20))
+    rep = await tick(deps, "default", NOW)
+    assert any("not reloaded" in n for n in rep.notes)
+    assert deps.campaigns["mine"].agent_name == "Alex"
+
+    path.unlink()
+    rep = await tick(deps, "default", NOW)
+    assert any("was removed" in n for n in rep.notes) and "mine" in deps.campaigns
+    # the fixture's in-memory campaign never came from disk and is never touched
+    assert deps.campaigns["test"].agent_name == "Alex"

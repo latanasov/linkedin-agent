@@ -351,3 +351,48 @@ def test_doctor_checks_each_role_where_it_runs(home, fakes, monkeypatch, tmp_pat
     assert "OpenRouter API key set" in r.output
     assert "ok   Ollama text model gemma4:12b" in r.output
     assert "Ollama browser model" not in r.output
+
+
+# ── one loop per home, and a clean way to stop it ─────────────────────────
+
+
+def _heartbeat_for(home: Path, pid: int) -> None:
+    import json
+    from datetime import datetime, timezone
+
+    home.mkdir(parents=True, exist_ok=True)
+    now = datetime.now(timezone.utc).isoformat()
+    (home / "run.json").write_text(
+        json.dumps({"pid": pid, "account": "default", "started_at": now, "heartbeat_at": now})
+    )
+
+
+def test_run_refuses_when_another_loop_is_active(home, fakes):
+    import subprocess
+
+    other = subprocess.Popen(["sleep", "30"])
+    try:
+        _heartbeat_for(home, other.pid)
+        r = runner.invoke(cli.app, ["run", "--once"])
+        assert r.exit_code == 1
+        assert f"already active (pid {other.pid}" in r.output and "linkedin-agent stop" in r.output
+    finally:
+        other.kill()
+        other.wait()
+
+
+def test_stop_signals_the_loop_and_reports(home):
+    import subprocess
+
+    r = runner.invoke(cli.app, ["stop"])
+    assert r.exit_code == 0 and "No run loop is active" in r.output
+
+    other = subprocess.Popen(["sleep", "30"])
+    try:
+        _heartbeat_for(home, other.pid)
+        r = runner.invoke(cli.app, ["stop"])
+        assert r.exit_code == 0 and "Stopped." in r.output, r.output
+        assert other.wait(timeout=5) is not None
+    finally:
+        if other.poll() is None:
+            other.kill()

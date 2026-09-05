@@ -55,8 +55,9 @@ Then:
 - **Is it up?** `status` (the tool, or `linkedin-agent status`) reports the run loop and
   its pid. It reads a heartbeat file, so it is true across terminals and sessions — you
   can check a loop you never started.
-- **Stop it:** `kill <pid>` from that line. There is no `stop` command; Ctrl-C works only
-  for a run in a visible terminal.
+- **Stop it:** `linkedin-agent stop`, from any terminal. It signals the loop, which closes
+  the browser, releases the task it was on and clears the heartbeat. Starting `run` while
+  one is active is refused, so there is never a second loop on the profile.
 - **Watch it:** `tail -f ~/.linkedin-agent/run.log` for a detached run.
 
 If a user asks you to start the run loop, give them the command to paste. Do not run it
