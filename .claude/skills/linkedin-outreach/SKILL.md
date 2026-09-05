@@ -21,7 +21,47 @@ stalled leads). Lead with what needs them.
 
 If the run loop is **not active**, say so plainly in your first reply. Imports, restarts
 and queued actions are all stored and correct, but nothing happens on LinkedIn until
-the user runs `linkedin-agent run` in a terminal. Do not imply otherwise.
+the user runs `linkedin-agent run` themselves. Do not imply otherwise, and do not start
+it for them — see below.
+
+## The run loop has to outlive you
+
+`linkedin-agent run` is a long-lived process: it ticks every few minutes for days, and
+its sequences span weeks. Your session is not.
+
+**Never start it from a tool call.** A process you launch through a shell tool is a child
+of the assistant session. When the session ends, the terminal closes, or the user quits
+Copilot or Claude, the process is killed with it — mid-action, possibly mid-message. The
+state survives (everything is in SQLite), but the user believes their campaign is running
+and it is not.
+
+Tell the user to start it themselves, in one of these two ways:
+
+```bash
+# a terminal they leave open — simplest, and they see the log
+linkedin-agent run
+
+# detached: survives closing the terminal and quitting the assistant
+nohup caffeinate -is linkedin-agent run --headless > ~/.linkedin-agent/run.log 2>&1 &
+```
+
+`caffeinate -is` is macOS and keeps the machine awake while it runs; on Linux use
+`nohup linkedin-agent run --headless > ~/.linkedin-agent/run.log 2>&1 &` and the
+equivalent sleep setting. `--headless` matters for a detached run: a visible Chrome
+window on a machine nobody is watching is just something to close by accident.
+
+Then:
+
+- **Is it up?** `status` (the tool, or `linkedin-agent status`) reports the run loop and
+  its pid. It reads a heartbeat file, so it is true across terminals and sessions — you
+  can check a loop you never started.
+- **Stop it:** `kill <pid>` from that line. There is no `stop` command; Ctrl-C works only
+  for a run in a visible terminal.
+- **Watch it:** `tail -f ~/.linkedin-agent/run.log` for a detached run.
+
+If a user asks you to start the run loop, give them the command to paste. Do not run it
+yourself even when you have a shell: it acts on their LinkedIn account, and it would die
+with you.
 
 ## Rules that never bend
 

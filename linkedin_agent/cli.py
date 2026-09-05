@@ -42,7 +42,14 @@ from .core.prompts import LINKEDIN_URL_RE
 from .core.runner import process_task, run_loop
 from .models import Action, LeadStage, Task
 from .scheduler import resolve_review, restart_lead, retry_lead, skip_lead_step, tick
-from .service import Service, ServiceError, clear_heartbeat, format_import, write_heartbeat
+from .service import (
+    Service,
+    ServiceError,
+    clear_heartbeat,
+    format_import,
+    run_state,
+    write_heartbeat,
+)
 
 app = typer.Typer(help="Standalone local LinkedIn outreach agent.", no_args_is_help=True)
 campaign_app = typer.Typer(help="Manage campaign files.", no_args_is_help=True)
@@ -638,6 +645,16 @@ def status(account: str = typer.Option(None)) -> None:
             f"account {name} · {login_state} · breaker {breaker} · "
             f"governor {health['governor']} · ramp week {health['ramp_week']}"
         )
+        # The pid matters: a detached run is stopped with `kill`, there being no `stop`.
+        state = run_state(app_.settings, now)
+        if state["active"]:
+            since = str(state.get("started_at") or "")[:16].replace("T", " ")
+            _echo(f"run loop: active · pid {state['pid']} · since {since}")
+        else:
+            _echo(
+                f"run loop: NOT active ({state.get('reason', 'stopped')}) — "
+                "nothing reaches LinkedIn until you start `linkedin-agent run`"
+            )
         cols = []
         for u in await reporting.usage_today(deps, name, now):
             if u["action"] in ("check_connection", "check_replies"):

@@ -18,6 +18,13 @@ The MCP server never drives the browser. Anything that touches LinkedIn is queue
 executed by `linkedin-agent run` with the usual caps and pacing, so there is never a
 second Chrome on your profile and nothing happens while the run loop is off.
 
+That split matters for a second reason: `run` outlives the conversation. Start it in your
+own terminal, or detached with `nohup` (see
+[Daily use](daily-use.md#leaving-it-running-without-a-terminal)) — never by asking the
+assistant to start it, because a process launched from a tool call is killed when you quit
+the assistant. The skills instruct assistants to hand you the command rather than run it,
+and `status` reports the loop and its pid from wherever you ask.
+
 ## From any project, not only this repository
 
 `skills/linkedin-agent/SKILL.md` is a portable entry point. Installed under

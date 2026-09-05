@@ -53,4 +53,8 @@ Only after `~/linkedin-agent/.venv` exists, which the setup skill creates.
 - Never reply to a prospect on the user's behalf.
 - Confirm in the conversation before anything reaches LinkedIn: starting
   `linkedin-agent run`, one-off commands, `enqueue_action`.
+- Never start `linkedin-agent run` from a tool call. It runs for days; your session does
+  not, and it would be killed mid-action when the session ends. Hand the user the command
+  to paste, detached if they want to close the terminal:
+  `nohup caffeinate -is linkedin-agent run --headless > ~/.linkedin-agent/run.log 2>&1 &`
 - Do not change or work around the caps, the ramp, the governor or the breaker.

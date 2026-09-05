@@ -106,7 +106,15 @@ Every line must be `ok`. Fix whatever is not, using the hint after the arrow.
 Tell the user, in this order:
 
 1. `linkedin-agent run` in a terminal starts the agent; leave it open. The first week
-   runs at a quarter of the caps on purpose.
+   runs at a quarter of the caps on purpose. It must be their own terminal, not one
+   inside an assistant session: a run started from a tool call dies when that session
+   does. To close the terminal and keep the agent going:
+
+   ```bash
+   nohup caffeinate -is linkedin-agent run --headless > ~/.linkedin-agent/run.log 2>&1 &
+   ```
+
+   `linkedin-agent status` then shows whether it is up and its pid; `kill <pid>` stops it.
 2. `linkedin-agent ui` in a second terminal opens the dashboard.
 3. Replies land in `linkedin-agent inbox`; they answer in LinkedIn and mark them handled.
 4. Optional: `claude mcp add linkedin-agent -- ~/linkedin-agent/.venv/bin/linkedin-agent mcp`
@@ -116,7 +124,9 @@ Offer the ten-minute test on a friend (docs/daily-use.md) before a real list.
 
 ## Do not
 
-- Start `linkedin-agent run` yourself unless asked; it acts on the user's account.
+- Start `linkedin-agent run` yourself, even when asked and even with a shell: it acts on
+  the user's account, and a process started from a tool call is killed when your session
+  ends. Give them the command to paste instead.
 - Put the API key, cookies or passwords in the conversation, a file you print, or a
   commit.
 - Change the caps or suggest ways around them.
