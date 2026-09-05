@@ -22,7 +22,11 @@ LINKEDIN_AGENT_TEXT_LLM_MODEL=gemma4:12b
 
 The OpenRouter key is not needed in this mode. `LINKEDIN_AGENT_OLLAMA_HOST` changes the
 address (default `http://localhost:11434`) and `LINKEDIN_AGENT_OLLAMA_TIMEOUT_S` the
-per-call timeout (default 600, because a 40,000-token prompt can take minutes).
+per-call timeout (default 600, because a 40,000-token prompt can take minutes). On the
+`ollama` provider that timeout is also given to the browser agent, which otherwise cuts
+every model call off at 60 seconds and every step at 120; `LINKEDIN_AGENT_BROWSER_LLM_TIMEOUT_S`
+and `LINKEDIN_AGENT_BROWSER_STEP_TIMEOUT_S` set the two separately if you want a shorter
+leash than 10 minutes per step.
 
 Then:
 
@@ -70,6 +74,12 @@ prompts much faster for the same quality. Sizes that fit an M4 Pro with 48 GB:
 | Browser | a Qwen 3.5 or 3.6 model around 35B with a small active-parameter count | Gemma 4 at 26 to 31B; a 30B model tuned for tool use and long tasks |
 | Text | Gemma 4 at 12B | Qwen 3.5 at 9B |
 
+Avoid reasoning models for the browser role. A model that thinks before answering spends
+its budget on the thinking and still owes you a JSON action; measured on an M4 Pro, a 30B
+reasoning model did not produce a first action inside ten minutes on a LinkedIn profile,
+while a same-size non-reasoning model answered in about a minute. If a tag has a
+thinking or reasoning variant, take the other one.
+
 Anything tagged **cloud** runs on Ollama's servers, not your machine; it removes the cost
 argument and most of the privacy one. Models below 9B are fine for text and not worth
 trying for the browser.
@@ -83,6 +93,9 @@ step log:
 linkedin-agent -v check https://www.linkedin.com/in/<someone-you-know>/
 linkedin-agent -v visit https://www.linkedin.com/in/<someone-you-know>/
 ```
+
+If instead of step lines you see `LLM call timed out after 60 seconds` repeating, you are
+on a version before those timeouts were configurable: pull the latest and try again.
 
 Look for three numbers in the output:
 

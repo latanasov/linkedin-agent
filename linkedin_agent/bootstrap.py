@@ -31,7 +31,12 @@ class _LazyExecutor:
 
     async def execute(self, task: Any, browser: Any) -> Any:
         if self._inner is None:
-            self._inner = BrowserUseExecutor(make_browser_llm(self._settings))
+            llm_timeout_s, step_timeout_s = self._settings.browser_timeouts
+            self._inner = BrowserUseExecutor(
+                make_browser_llm(self._settings),
+                llm_timeout_s=llm_timeout_s,
+                step_timeout_s=step_timeout_s,
+            )
         return await self._inner.execute(task, browser)
 
 

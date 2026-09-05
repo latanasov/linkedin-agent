@@ -41,7 +41,18 @@ def test_agent_and_llm_surface():
 
     assert Browser is not None
     params = inspect.signature(Agent.__init__).parameters
-    for kw in ("task", "llm", "browser", "max_actions_per_step", "max_failures", "use_judge"):
+    for kw in (
+        "task",
+        "llm",
+        "browser",
+        "max_actions_per_step",
+        "max_failures",
+        "use_judge",
+        # We raise both for local models; browser-use's own defaults (60s / 120s) are
+        # shorter than one step of a 40k-token prompt on a laptop.
+        "llm_timeout",
+        "step_timeout",
+    ):
         assert kw in params, kw
     assert "max_steps" in inspect.signature(Agent.run).parameters
     assert "api_key" in inspect.signature(ChatOpenRouter).parameters
