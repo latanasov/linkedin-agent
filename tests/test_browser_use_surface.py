@@ -59,3 +59,27 @@ def test_agent_and_llm_surface():
     from browser_use.agent.views import AgentHistoryList
 
     assert callable(AgentHistoryList.final_result)
+
+
+def test_signal_handler_surface_and_neutralisation():
+    """We disable browser-use's process-wide signal handling; the class and both methods
+    it installs through must exist, and after neutralisation registering does nothing."""
+    import asyncio
+    import signal
+
+    from browser_use.utils import SignalHandler
+
+    from linkedin_agent.core.prompts import keep_our_signal_handlers
+
+    assert callable(SignalHandler.register) and callable(SignalHandler.unregister)
+    keep_our_signal_handlers()
+    loop = asyncio.new_event_loop()
+    try:
+        before = signal.getsignal(signal.SIGTERM)
+        h = SignalHandler(loop=loop)
+        h.register()
+        assert signal.getsignal(signal.SIGTERM) is before, "register must not touch SIGTERM"
+        h.unregister()
+        assert signal.getsignal(signal.SIGTERM) is before
+    finally:
+        loop.close()

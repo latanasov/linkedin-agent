@@ -59,6 +59,9 @@ All three checks must pass before a push; CI runs the same three.
   detected by wall-vs-monotonic drift (`SleepWatch`), and session expiry waits for
   `login` instead of exiting. `scheduler.refresh_campaigns` reloads edited campaign
   files each tick; `tick` isolates a lead whose step id no longer exists.
+- browser-use's `Agent.run()` installs its own SIGINT/SIGTERM handlers and removes ours
+  on exit; `core/prompts.keep_our_signal_handlers` turns that off so `stop`/Ctrl-C reach
+  the run loop's cleanup. Bumping the browser-use pin means re-checking `SignalHandler`.
 - Tasks record the pid that claimed them (schema v3, `claimed_by`);
   `requeue_stale_running` releases tasks of dead processes at once and leaves live ones
   alone. `run` refuses to start while the heartbeat shows another loop; `stop` signals it.

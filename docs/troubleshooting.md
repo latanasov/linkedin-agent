@@ -46,6 +46,12 @@ up, notices, prints `login detected; resuming` and carries on with a fresh brows
 Nothing is lost. This can happen after a password change or a security check on
 LinkedIn's side.
 
+**`stop` says `Stopped.` but the shell prints `terminated`, or a Chrome is left behind**
+Versions before 2026-09-05 lost their SIGTERM handler after the first browser task, so
+`stop` killed the loop without cleanup. Update, restart the loop once, and check for a
+stray Chrome from the old one: `pgrep -fl "user-data-dir=/var/folders" | grep -i chrome`,
+then `kill` any pid listed that the new loop did not start.
+
 **`A run loop is already active (pid N, since …)`**
 One is running, possibly detached or in another terminal. Only one may run per home:
 two would mean two Chromes on one LinkedIn session. `linkedin-agent stop` ends it, then
