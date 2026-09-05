@@ -101,6 +101,32 @@ def parse_agent_result(raw: Any) -> Any:
     return parsed
 
 
+_SIGNALS_NEUTRALIZED = False
+
+
+def keep_our_signal_handlers() -> None:
+    """Stop browser-use from taking over SIGINT/SIGTERM for the whole process.
+
+    Agent.run() registers its own handlers on the event loop for the duration of a task
+    (pause on Ctrl-C, os._exit(0) on SIGTERM) and on the way out removes whatever handler
+    is installed — ours — and restores an "original" it recorded as None. So after the
+    first browser task a SIGTERM killed the run outright, skipping the cleanup that
+    closes Chrome, releases the task and clears the heartbeat; during a task it exited
+    the process from inside the handler. The run loop owns the process lifecycle, so
+    browser-use's register/unregister become no-ops. tests/test_browser_use_surface.py
+    guards that the class and both methods still exist."""
+    global _SIGNALS_NEUTRALIZED
+    if _SIGNALS_NEUTRALIZED:
+        return
+    try:
+        from browser_use.utils import SignalHandler
+    except ImportError:  # pragma: no cover - browser_use is a hard dependency
+        return
+    SignalHandler.register = lambda self: None  # type: ignore[method-assign]
+    SignalHandler.unregister = lambda self: None  # type: ignore[method-assign]
+    _SIGNALS_NEUTRALIZED = True
+
+
 async def run_linkedin_agent(
     prompt: str,
     browser: Any,
@@ -119,6 +145,7 @@ async def run_linkedin_agent(
     own per-model defaults."""
     from browser_use import Agent
 
+    keep_our_signal_handlers()
     extra: dict[str, Any] = {}
     if llm_timeout_s is not None:
         extra["llm_timeout"] = llm_timeout_s
