@@ -47,10 +47,14 @@ def _round_half_up(x: float) -> int:
     return int(math.floor(x + 0.5))
 
 
-def account_age_days(first_action_at: datetime | None, now: datetime) -> int:
+def account_age_days(
+    first_action_at: datetime | None, now: datetime, ramp_offset_days: int = 0
+) -> int:
+    """Age for ramp purposes. `ramp_offset_days` credits time already served, so an
+    account that starts the ramp at week 3 is treated as 14 days old on day one."""
     if first_action_at is None:
-        return 0
-    return max(0, (now - first_action_at).days)
+        return ramp_offset_days
+    return max(0, (now - first_action_at).days) + ramp_offset_days
 
 
 def ramp_multiplier(age_days: int) -> float:

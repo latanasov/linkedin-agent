@@ -39,7 +39,7 @@ from .core.browser_pool import (
     user_agent_of,
     verify_logged_in,
 )
-from .core.limits import ramp_week
+from .core.limits import account_age_days, ramp_week
 from .core.proc import pid_alive
 from .core.prompts import LINKEDIN_URL_RE
 from .core.runner import process_task, run_loop
@@ -542,10 +542,8 @@ def run(
         if acct.first_action_at is None:
             _echo("New account: week-1 ramp (25% of caps) is active.")
         else:
-            _echo(
-                f"Ramp week {ramp_week((_now() - acct.first_action_at).days)} · "
-                f"governor {acct.governor_state.value}"
-            )
+            age = account_age_days(acct.first_action_at, _now(), app_.settings.ramp_offset_days)
+            _echo(f"Ramp week {ramp_week(age)} · governor {acct.governor_state.value}")
 
         async def do_tick() -> None:
             rep = await tick(deps, name)

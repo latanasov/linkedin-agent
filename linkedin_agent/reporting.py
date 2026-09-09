@@ -7,7 +7,7 @@ import statistics
 from datetime import datetime, timedelta
 from typing import Any
 
-from .core.limits import ramp_week
+from .core.limits import account_age_days, ramp_week
 from .core.runner import Deps, caps_for, usage
 from .models import Action, LeadRecord, LeadSequence, LeadStage, Task
 
@@ -43,7 +43,7 @@ async def account_health(deps: Deps, account: str, now: datetime) -> dict[str, A
     else:
         login = "not_logged_in"
     tripped = bool(acct.tripped_until and acct.tripped_until > now)
-    age = (now - acct.first_action_at).days if acct.first_action_at else 0
+    age = account_age_days(acct.first_action_at, now, deps.settings.ramp_offset_days)
     return {
         "account": account,
         "login": login,

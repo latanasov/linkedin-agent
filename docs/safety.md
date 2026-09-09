@@ -40,6 +40,13 @@ clearest bot signal there is:
 "Age" is counted from the agent's first action, so a fresh database also starts at
 week 1. `status` and the dashboard show the current ramp week.
 
+A profile with years of real history is not the fresh account the ramp is written for.
+`LINKEDIN_AGENT_RAMP_START_WEEK` starts it partway up: `3` means 60% of the caps from the
+first day, `4` means 80%. `5` skips the ramp entirely, which is the overnight jump it
+exists to prevent; that is your decision to make in the settings file, never something
+the agent or an assistant will do for you. Read at startup: restart the loop after
+changing it.
+
 ## The governor
 
 LinkedIn throttles accounts whose invites are ignored. The agent watches your acceptance
@@ -161,6 +168,7 @@ first four.
 | `OPENROUTER_API_KEY` | | Required. |
 | `DEFAULT_TIMEZONE` | `UTC` | For people whose location is unknown. |
 | `TIER` | `pro` | Upper limits: `free`, `pro`, `ultimate`. |
+| `RAMP_START_WEEK` | `1` | Start the four-week ramp at this week: `3` = 60% of the caps from day one, `5` = no ramp. Needs a restart. |
 | `CHROME_PATH` | Playwright Chromium | Path to Chrome. Must not change after login. |
 | `LLM_PROVIDER` | `openrouter` | `openrouter` or `ollama` (local models, no key). See [Local models](local-models.md). |
 | `BROWSER_LLM_PROVIDER` / `TEXT_LLM_PROVIDER` | `LLM_PROVIDER` | Override the provider for one model, e.g. browser on OpenRouter and text on Ollama. |

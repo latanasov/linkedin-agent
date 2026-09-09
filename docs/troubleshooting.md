@@ -84,7 +84,9 @@ holding everything; see below. If a campaign is paused, `resume` it.
 Normal. Today's cap is used up. See [Safety and limits](safety.md).
 
 **`Ramp week 1`**
-Normal for a new account or a fresh database. Caps are at a quarter for seven days.
+Normal for a new account or a fresh database. Caps are at a quarter for seven days. A
+profile with real history can start higher: `LINKEDIN_AGENT_RAMP_START_WEEK=3` in `.env`
+gives 60% from the first day (restart the loop). See [Safety](safety.md#the-ramp).
 
 **`Governor: acceptance rate 24%, invites halved`**
 Too few people accept your invites. Improve targeting and your profile before sending

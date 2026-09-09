@@ -130,4 +130,6 @@ Offer the ten-minute test on a friend (docs/daily-use.md) before a real list.
   ends. Give them the command to paste instead.
 - Put the API key, cookies or passwords in the conversation, a file you print, or a
   commit.
-- Change the caps or suggest ways around them.
+- Change the caps or suggest ways around them. The one legitimate speed lever is
+  `LINKEDIN_AGENT_RAMP_START_WEEK` for a profile with years of real history; suggest `3`
+  at most, say what it does (60% of the caps from day one), and let the user set it.

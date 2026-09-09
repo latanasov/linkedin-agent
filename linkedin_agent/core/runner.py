@@ -131,7 +131,7 @@ def caps_for(
 ) -> tuple[int, int | None]:
     return effective_cap(
         action,
-        account_age_days(acct.first_action_at, now),
+        account_age_days(acct.first_action_at, now, deps.settings.ramp_offset_days),
         acct.governor_state,
         deps.settings.user_cap(action.value),
         deps.settings.tier,

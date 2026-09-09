@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Literal
 
-from pydantic import field_validator
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 DEFAULT_HOME = Path("~/.linkedin-agent").expanduser()
@@ -40,6 +40,11 @@ class Settings(BaseSettings):
     browser_llm_model: str = "google/gemini-2.5-flash"
     text_llm_model: str = "google/gemini-2.5-flash"
     tier: Literal["free", "pro", "ultimate"] = "pro"
+    # Where the four-week ramp starts. 1 = a profile new to this kind of activity (25% of
+    # the caps in week one). A profile with years of real history can defensibly start
+    # partway up; 3 is 60%. 5 skips the ramp, which is the overnight jump it guards
+    # against — that is the user's call to make explicitly, never a default.
+    ramp_start_week: int = Field(default=1, ge=1, le=5)
     daily_visit_limit: int | None = None
     daily_connect_limit: int | None = None
     daily_message_limit: int | None = None
@@ -61,6 +66,11 @@ class Settings(BaseSettings):
     @classmethod
     def _expand(cls, v: str | Path) -> Path:
         return Path(v).expanduser()
+
+    @property
+    def ramp_offset_days(self) -> int:
+        """Days of ramp already considered served, from ramp_start_week."""
+        return (self.ramp_start_week - 1) * 7
 
     @property
     def uses_openrouter(self) -> bool:

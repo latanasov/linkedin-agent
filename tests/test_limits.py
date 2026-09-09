@@ -76,3 +76,19 @@ def test_governor_hysteresis():
     assert governor_state(H, 0.32, 20) == H  # not yet recovered
     assert governor_state(H, 0.36, 20) == N
     assert governor_state(P, 0.25, 20) == H
+
+
+def test_account_age_credits_ramp_offset():
+    from datetime import datetime, timedelta, timezone
+
+    from linkedin_agent.core.limits import account_age_days, effective_cap, ramp_week
+    from linkedin_agent.models import Action
+
+    now = datetime(2026, 9, 9, tzinfo=timezone.utc)
+    first = now - timedelta(days=5)
+    assert account_age_days(first, now) == 5
+    assert account_age_days(first, now, 14) == 19 and ramp_week(19) == 3
+    assert account_age_days(None, now, 14) == 14, "no first action yet: still credited"
+    # week 3 = 60% of the caps from day one
+    assert effective_cap(Action.CONNECT, account_age_days(None, now, 14))[0] == 12
+    assert effective_cap(Action.VISIT, account_age_days(None, now, 14))[0] == 36

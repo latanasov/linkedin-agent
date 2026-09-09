@@ -128,3 +128,14 @@ def test_factories_follow_the_per_role_provider(monkeypatch):
     assert make_text_llm(s)._url == OPENROUTER_URL
     s = _settings(llm_provider="openrouter", text_llm_provider="ollama", openrouter_api_key="k")
     assert make_text_llm(s)._url.startswith("http://localhost:11434")
+
+
+def test_ramp_start_week_setting():
+    import pytest as _pytest
+
+    assert _settings().ramp_offset_days == 0
+    assert _settings(ramp_start_week=3).ramp_offset_days == 14
+    assert _settings(ramp_start_week=5).ramp_offset_days == 28
+    for bad in (0, 6):
+        with _pytest.raises(Exception):
+            _settings(ramp_start_week=bad)
