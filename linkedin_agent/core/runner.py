@@ -582,6 +582,8 @@ async def _fail(
         acct.trip_reason = f"LinkedIn restriction signal: {result.error or result.status}"[:200]
         acct.consecutive_failures = 0
         note = f"circuit breaker tripped for {BREAKER_HOURS}h"
+    elif kind == ErrorKind.OTHER and result.data.get("budget_exhausted"):
+        note = "ran out of steps"  # retried like any failure; not a breaker signal
     elif kind == ErrorKind.OTHER:
         acct.consecutive_failures += 1
         if acct.consecutive_failures >= MAX_CONSECUTIVE_FAILURES:

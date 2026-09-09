@@ -154,12 +154,13 @@ slow: a step that needs ten minutes is not usable either. Try a smaller,
 non-reasoning model, or keep the browser on OpenRouter. See
 [Local models](local-models.md).
 
-**`agent stopped after N of M steps without a result`**
+**`agent stopped after N of M steps without a result` / `ran out of steps`**
 The browser model used its whole step budget, or failed too many steps in a row, and
 never reported an outcome. The line names the last step error — a timeout means the
 browser or the model was slow, and the task is retried as a browser problem without
-counting against the lead or the breaker; anything else counts as an ordinary failure
-and is retried up to three times. The retry is safe: a connect that did go out reads as
+counting against the lead or the breaker; anything else is retried up to three times
+and then stalls the lead, but never counts toward the breaker: running out of steps is
+the model's budget, not a LinkedIn signal. The retry is safe: a connect that did go out reads as
 `already_pending`, a message as `already_sent`. If one action hits this repeatedly, run
 once with `-v` and share the step log.
 

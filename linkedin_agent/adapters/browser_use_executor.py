@@ -9,7 +9,7 @@ from ..core.tasks import build_prompt
 from ..models import Action, Task, TaskResult
 
 MAX_STEPS: dict[Action, int] = {
-    Action.VISIT: 8,
+    Action.VISIT: 12,
     Action.CHECK_CONNECTION: 6,
     Action.CHECK_REPLIES: 8,
     Action.FOLLOW: 8,

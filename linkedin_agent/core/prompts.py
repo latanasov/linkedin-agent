@@ -188,4 +188,8 @@ def unfinished_run(history: Any, max_steps: int) -> dict[str, Any] | None:
     last = str(history.final_result() or "")[:100] if hasattr(history, "final_result") else ""
     if last:
         msg += f"; last output: {last}"
-    return {"status": "failed", "error": msg}
+    # budget_exhausted: the task's attempts are still spent (so a lead cannot loop for
+    # ever), but the breaker does not count it — running out of steps is the model's
+    # budget, not a LinkedIn signal, and three heavy profiles in a row must not stop a
+    # campaign for two days.
+    return {"status": "failed", "error": msg, "budget_exhausted": True}

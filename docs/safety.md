@@ -68,7 +68,8 @@ The agent trips for 48 hours, and stops scheduling anything, when either happens
 
 - LinkedIn shows a restriction message: "unusual activity", "temporarily limited",
   "verify your identity", or the browser gets rate-limited.
-- Three actions in a row fail for ordinary reasons.
+- Three actions in a row fail for ordinary reasons. A browser task that merely ran out
+  of steps on a long page is retried but not counted; only a reported failure is.
 
 `status` shows the reason. Do nothing on LinkedIn for two days. If you are sure it was
 a false alarm, `linkedin-agent breaker reset`.

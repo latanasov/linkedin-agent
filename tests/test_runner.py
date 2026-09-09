@@ -918,3 +918,39 @@ async def test_caps_and_status_follow_ramp_start_week(deps):
     deps.settings.ramp_start_week = 3
     assert caps_for(deps, acct, Action.CONNECT, NOW)[0] == 12, "week 3 = 60%"
     assert (await reporting.account_health(deps, "default", NOW))["ramp_week"] == 3
+
+
+async def test_running_out_of_steps_retries_but_does_not_count_toward_the_breaker(deps, executor):
+    """Seen live: four of twelve visits ran out of steps in an hour. Two in a row twice.
+    Three would have tripped the breaker for 48 hours over the model's step budget."""
+    from linkedin_agent.core.prompts import unfinished_run
+
+    class History:
+        def is_done(self):
+            return False
+
+        def number_of_steps(self):
+            return 12
+
+        def errors(self):
+            return []
+
+        def final_result(self):
+            return ""
+
+    lead, _ = await seed(deps)
+    executor.script(Action.VISIT, unfinished_run(History(), 12))
+    for n in (1, 2, 3):
+        t = await enqueue_step(deps, lead, "warm.visit")
+        out = await process_task(t, deps)
+        acct = await deps.accounts.get("default")
+        assert acct.consecutive_failures == 0 and acct.tripped_until is None
+        assert "ran out of steps" in out.note
+    # attempts are still spent: after the third the task is failed, not retried for ever
+    assert out.status in (TaskStatus.QUEUED, TaskStatus.FAILED)
+
+
+def test_visit_has_room_for_a_long_profile():
+    from linkedin_agent.adapters.browser_use_executor import MAX_STEPS
+
+    assert MAX_STEPS[Action.VISIT] >= 12
