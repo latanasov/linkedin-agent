@@ -23,7 +23,15 @@ logger = logging.getLogger(__name__)
 
 MEMORY_THRESHOLD_PCT = 70
 
+# Linux only: Chromium encrypts profile cookies with whatever secret store it detects at
+# start (GNOME keyring, KWallet, or a fixed key). A login done inside a desktop session and
+# a task browser started by systemd with no session bus would otherwise pick different
+# stores and the tasks would never see the login. Pin both to the same store. The switch
+# is ignored on macOS and Windows, which use the OS keychain per binary regardless.
+PASSWORD_STORE_FLAG = "--password-store=basic"
+
 CHROMIUM_FLAGS = [
+    PASSWORD_STORE_FLAG,
     "--disable-dev-shm-usage",
     "--disable-extensions",
     "--disable-background-networking",
@@ -63,6 +71,7 @@ async def resolve_chrome_executable(settings: Settings) -> Path:
 
 
 PLAIN_CHROME_FLAGS = [
+    PASSWORD_STORE_FLAG,
     "--no-first-run",
     "--no-default-browser-check",
     "--disable-sync",

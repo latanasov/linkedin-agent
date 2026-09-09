@@ -30,6 +30,8 @@ def test_plain_chrome_command_shape(tmp_path: Path, monkeypatch):
     assert cmd[1] == f"--user-data-dir={tmp_path / 'p'}"
     assert "--no-first-run" in cmd and "--no-sandbox" not in cmd
     assert cmd[-1] == "https://www.linkedin.com/login"
+    # Login and task browsers must share one cookie store, see PASSWORD_STORE_FLAG.
+    assert bp.PASSWORD_STORE_FLAG in cmd and bp.PASSWORD_STORE_FLAG in bp.CHROMIUM_FLAGS
     monkeypatch.setattr(bp, "_running_as_root", lambda: True)
     assert "--no-sandbox" in bp.plain_chrome_command(Path("/x/chrome"), tmp_path, "u")
 

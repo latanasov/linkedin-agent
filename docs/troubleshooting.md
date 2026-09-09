@@ -45,6 +45,9 @@ LinkedIn signed you out. Run `login` in another terminal and sign in; the run lo
 up, notices, prints `login detected; resuming` and carries on with a fresh browser.
 Nothing is lost. This can happen after a password change or a security check on
 LinkedIn's side.
+On Linux, if this appears right after a successful `login`, the login window and the task
+browser used different cookie stores. Both are pinned to the same store now; update the
+agent and log in again.
 
 **`stop` says `Stopped.` but the shell prints `terminated`, or a Chrome is left behind**
 Versions before 2026-09-05 lost their SIGTERM handler after the first browser task, so

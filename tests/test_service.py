@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -225,7 +225,9 @@ def test_run_state_reads_the_heartbeat(settings, clock):
     write_heartbeat(settings, "default", clock.now)
     st = run_state(settings)
     assert st["active"] is True and st["pid"] == os.getpid() and st["account"] == "default"
-    old = run_state(settings, clock.now + timedelta(minutes=10))
+    # write_heartbeat stamps the wall clock, so age it against the wall clock too; the
+    # fixed test clock made this pass or fail depending on the time of day.
+    old = run_state(settings, datetime.now(timezone.utc) + timedelta(minutes=10))
     assert old["active"] is False and "last heartbeat" in old["reason"]
     clear_heartbeat(settings)
     clear_heartbeat(settings)  # idempotent
