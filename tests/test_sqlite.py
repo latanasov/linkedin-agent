@@ -240,6 +240,20 @@ async def test_leads_upsert_find_update_and_sequences(db):
     assert [ld.id for ld in await store.by_stage(LeadStage.INVITED)] == [lead.id]
 
 
+async def test_find_a_lead_that_has_no_last_name(db):
+    """CSV imports often carry only a first name; the joined name must still match."""
+    store = SqliteLeadStore(db)
+    # The slug deliberately does not contain the first name, so only the name branch
+    # of find() can match and the test cannot pass by accident on the URL lookup.
+    lead = make_lead(
+        first_name="Vikram", last_name=None, linkedin_url="https://www.linkedin.com/in/vs-9911/"
+    )
+    await store.upsert_many([lead])
+    assert (await store.find("Vikram")).id == lead.id
+    assert (await store.find("  vikram ")).id == lead.id
+    assert await store.find("Vikram Singh") is None
+
+
 async def test_leads_pause_resume_and_acceptance_sample(db):
     store = SqliteLeadStore(db)
     camp = make_campaign()

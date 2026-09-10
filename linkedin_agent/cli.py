@@ -698,7 +698,10 @@ def status(account: str = typer.Option(None)) -> None:
     async def go(app_: App) -> None:
         name = account or app_.settings.account
         deps = app_.deps
-        now = _now()
+        # Domain time comes from the same clock the run loop stamps actions with, so
+        # today's counts line up with the log. The heartbeat below stays on wall time:
+        # it is written by another process and is only ever compared with real seconds.
+        now = deps.clock()
         health = await reporting.account_health(deps, name, now)
         login_state = {
             "logged_in": f"logged in {(health['logged_in_at'] or '')[:10]}",
@@ -715,7 +718,7 @@ def status(account: str = typer.Option(None)) -> None:
             f"governor {health['governor']} · ramp week {health['ramp_week']}"
         )
         # The pid matters: a detached run is stopped with `kill`, there being no `stop`.
-        state = run_state(app_.settings, now)
+        state = run_state(app_.settings)
         if state["active"]:
             since = str(state.get("started_at") or "")[:16].replace("T", " ")
             fast = " · FAST TEST (windows and spacing off)" if state.get("fast_test") else ""

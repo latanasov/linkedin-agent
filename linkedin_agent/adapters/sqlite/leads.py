@@ -102,8 +102,11 @@ class SqliteLeadStore:
                 (f"%/in/{slug}/%", f"%/in/{slug}"),
             )
         if row is None:
+            # trim(): a lead imported without a last name is stored as "Ada", not "Ada ",
+            # so the joined form has a trailing space that would never match what you type.
             row = await self._db.fetchone(
-                "SELECT * FROM leads WHERE lower(first_name||' '||coalesce(last_name,''))=lower(?) LIMIT 1",
+                "SELECT * FROM leads "
+                "WHERE lower(trim(first_name||' '||coalesce(last_name,'')))=lower(trim(?)) LIMIT 1",
                 (key,),
             )
         return _row_to_lead(row) if row else None
