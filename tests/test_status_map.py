@@ -159,7 +159,11 @@ def test_parse_posts_drops_urls_that_are_not_posts():
 
     posts = _parse_posts(
         [
-            {"url": "https://www.linkedin.com/in/johndoe/", "posted_days_ago": 1, "text": "Hiring!"},
+            {
+                "url": "https://www.linkedin.com/in/johndoe/",
+                "posted_days_ago": 1,
+                "text": "Hiring!",
+            },
             {"url": "https://www.linkedin.com/jobs/view/123/", "posted_days_ago": 2, "text": "Job"},
             {
                 "url": "https://www.linkedin.com/posts/johndoe_ai-activity-7100_abc",

@@ -93,9 +93,7 @@ def test_post_ref_blanks_a_url_that_is_not_a_post():
 
     good = PostRef(url="https://www.linkedin.com/posts/janedoe_a-123", text="x")
     assert good.url == "https://www.linkedin.com/posts/janedoe_a-123"
-    bad = PostRef(
-        url="https://www.linkedin.com/in/john-doe-456/", text="x", posted_days_ago=2
-    )
+    bad = PostRef(url="https://www.linkedin.com/in/john-doe-456/", text="x", posted_days_ago=2)
     assert bad.url == "" and bad.text == "x" and bad.posted_days_ago == 2
     assert PostRef(url=None, text="x").url == ""
     lead = LeadRecord(
