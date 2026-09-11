@@ -3,6 +3,7 @@ from linkedin_agent.core.status_map import (
     is_cannot_contact,
     is_soft_skip,
     is_success,
+    normalize_missing_profile,
     normalize_reply_check,
     normalize_status,
 )
@@ -120,6 +121,30 @@ def test_success_soft_skip_cannot_contact_tables():
     assert is_soft_skip(Action.FOLLOW, TaskResult(status="cannot_follow"))
     assert is_cannot_contact(Action.INMAIL, TaskResult(status="cannot_message"))
     assert not is_success(Action.MESSAGE, TaskResult(status="failed"))
+    assert is_cannot_contact(Action.VISIT, TaskResult(status="profile_not_found"))
+    assert not is_success(Action.VISIT, TaskResult(status="profile_not_found"))
+
+
+def test_missing_profile_ends_the_lead_and_is_left_alone_by_normalize_status():
+    lead = make_lead(stage=LeadStage.NEW)
+    out = apply_result(lead, Action.VISIT, TaskResult(status="profile_not_found"), NOW)
+    assert out.stage == LeadStage.CANNOT_CONTACT and out.last_touch_at is None
+    r = TaskResult(status="profile_not_found", data={"x": 1})
+    assert normalize_status(Action.VISIT, r) is r
+
+
+def test_normalize_missing_profile_maps_error_shaped_reports_for_visits_only():
+    for err in ("page_not_found", "profile_not_found", "This page doesn't exist", "HTTP 404"):
+        r = normalize_missing_profile(Action.VISIT, TaskResult(status="failed", error=err))
+        assert r.status == "profile_not_found", err
+        assert r.data["reported_status"] == "failed" and r.data["reported_error"] == err
+    # other visit failures, and other actions, are untouched
+    keep = TaskResult(status="failed", error="max_steps_reached")
+    assert normalize_missing_profile(Action.VISIT, keep) is keep
+    other = TaskResult(status="failed", error="page_not_found")
+    assert normalize_missing_profile(Action.LIKE_POST, other) is other
+    ok = TaskResult(status="ok", error="page_not_found")  # not a failure: leave it
+    assert normalize_missing_profile(Action.VISIT, ok) is ok
 
 
 def test_normalize_reply_check_keeps_a_real_reply():

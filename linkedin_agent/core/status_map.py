@@ -25,6 +25,7 @@ SUCCESS_STATUSES: dict[Action, frozenset[str]] = {
 
 # Result statuses that mean the prospect cannot be contacted on this path at all.
 CANNOT_CONTACT_STATUSES: dict[Action, frozenset[str]] = {
+    Action.VISIT: frozenset({"profile_not_found"}),
     Action.MESSAGE: frozenset({"not_connected", "cannot_message"}),
     Action.INMAIL: frozenset({"cannot_message"}),
     Action.CONNECT: frozenset({"cannot_connect"}),
@@ -55,6 +56,36 @@ def known_statuses(action: Action) -> frozenset[str]:
         | CANNOT_CONTACT_STATUSES.get(action, frozenset())
         | _OTHER_KNOWN.get(action, frozenset())
     )
+
+
+# Error strings a visit prompt produces for a profile that is not there. The prompt asks
+# for the status form; models still answer with status="failed" and one of these.
+_MISSING_PROFILE_ERRORS = (
+    "profile_not_found",
+    "page_not_found",
+    "profile not found",
+    "page not found",
+    "doesn't exist",
+    "does not exist",
+    "no longer exists",
+    "profile not available",
+    "profile unavailable",
+    "404",
+)
+
+
+def normalize_missing_profile(action: Action, result: TaskResult) -> TaskResult:
+    """A visit that failed *because the profile is gone* is a profile_not_found.
+
+    Left as a plain failure it would be retried to exhaustion and every attempt would
+    count toward the circuit breaker, for a condition no retry can change."""
+    if action != Action.VISIT or result.status not in ("failed", "error"):
+        return result
+    probe = (result.error or "").lower()
+    if not any(k in probe for k in _MISSING_PROFILE_ERRORS):
+        return result
+    data = {**result.data, "reported_status": result.status, "reported_error": result.error}
+    return TaskResult(status="profile_not_found", data=data)
 
 
 def normalize_status(action: Action, result: TaskResult) -> TaskResult:

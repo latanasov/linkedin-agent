@@ -954,3 +954,78 @@ def test_visit_has_room_for_a_long_profile():
     from linkedin_agent.adapters.browser_use_executor import MAX_STEPS
 
     assert MAX_STEPS[Action.VISIT] >= 12
+
+
+# ── a profile that no longer exists ends the lead, and never trips the breaker ──
+
+
+async def _visit_missing_twice(deps, executor, scripted):
+    """Run the visit step twice with the same scripted result; return both outcomes."""
+    lead, _ = await seed(deps)
+    executor.script(Action.VISIT, scripted)
+    t = await enqueue_step(deps, lead, "warm.visit")
+    first = await process_task(t, deps)
+    acct_after_first = await deps.accounts.get("default")
+    t = await deps.queue.get(t.id)
+    t.status, t.attempts = TaskStatus.RUNNING, 2
+    await deps.queue.update(t)
+    second = await process_task(t, deps)
+    return lead, first, acct_after_first, second
+
+
+async def test_missing_profile_is_confirmed_once_then_ends_the_lead(deps, executor):
+    """Seen live: a dead profile burned all three retries and each counted toward the
+    breaker. It is a permanent condition; one confirming look is enough."""
+    acct = await deps.accounts.get("default")
+    acct.consecutive_failures = 2  # one more generic failure would trip the breaker
+    await deps.accounts.save(acct)
+
+    lead, first, acct, second = await _visit_missing_twice(
+        deps, executor, {"status": "profile_not_found", "error": None}
+    )
+    # first sighting: retried, not believed yet, not a breaker signal
+    assert first.status == TaskStatus.QUEUED and "confirming" in first.note
+    assert acct.consecutive_failures == 2 and acct.tripped_until is None
+    # second sighting: the lead ends cleanly, the task is done, the counter resets
+    assert second.status == TaskStatus.DONE and second.result.status == "profile_not_found"
+    assert (await deps.leads.get(lead.id)).stage == LeadStage.CANNOT_CONTACT
+    assert (await deps.leads.get_sequence(lead.id)).step_id is None
+    acct = await deps.accounts.get("default")
+    assert acct.consecutive_failures == 0 and acct.tripped_until is None
+
+
+async def test_missing_profile_reported_as_a_failed_error_is_the_same_thing(deps, executor):
+    """The prompt names profile_not_found; the model still answers failed + page_not_found."""
+    lead, first, _, second = await _visit_missing_twice(
+        deps, executor, {"status": "failed", "error": "page_not_found"}
+    )
+    assert first.status == TaskStatus.QUEUED and "confirming" in first.note
+    assert second.status == TaskStatus.DONE and second.result.status == "profile_not_found"
+    assert second.result.data["reported_error"] == "page_not_found"
+    assert (await deps.leads.get(lead.id)).stage == LeadStage.CANNOT_CONTACT
+
+
+async def test_a_false_missing_profile_sighting_recovers_on_the_second_look(deps, executor):
+    """A half-loaded page reads as "not found"; the retry sees the real profile."""
+    lead, _ = await seed(deps, stage=LeadStage.NEW)
+    executor.script(Action.VISIT, {"status": "profile_not_found"})
+    t = await enqueue_step(deps, lead, "warm.visit")
+    first = await process_task(t, deps)
+    assert first.status == TaskStatus.QUEUED
+    executor.script(Action.VISIT, {"status": "ok", "full_name": "Jane Doe", "posts": []})
+    t = await deps.queue.get(t.id)
+    t.status, t.attempts = TaskStatus.RUNNING, 2
+    await deps.queue.update(t)
+    second = await process_task(t, deps)
+    assert second.status == TaskStatus.DONE and second.result.status == "ok"
+    assert (await deps.leads.get(lead.id)).stage == LeadStage.WARMING
+
+
+async def test_other_visit_failures_still_count_toward_the_breaker(deps, executor):
+    """The exemption is for a missing profile only; a generic failure is unchanged."""
+    lead, _ = await seed(deps)
+    executor.script(Action.VISIT, {"status": "failed", "error": "max_steps_reached"})
+    t = await enqueue_step(deps, lead, "warm.visit")
+    out = await process_task(t, deps)
+    assert out.status == TaskStatus.QUEUED and "confirming" not in out.note
+    assert (await deps.accounts.get("default")).consecutive_failures == 1

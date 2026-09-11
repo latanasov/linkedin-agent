@@ -180,7 +180,7 @@ If a like/comment step has no post to act on it is skipped even on the posts bra
 
 | Action | Params | Statuses it can return | Default when not routed |
 |---|---|---|---|
-| `visit` | – | `ok` | next step; also decides the branch and time zone |
+| `visit` | – | `ok`, `profile_not_found` | next step; also decides the branch and time zone. `profile_not_found` ends the lead as `cannot_contact` after a confirming second visit |
 | `follow` | – | `followed`, `already_following`, `cannot_follow` | next step |
 | `like_post` | `pick: newest \| different_from_liked` | `liked`, `already_liked`, `post_not_found`, `cannot_like` | next step |
 | `comment_post` | `pick`, `max_sentences` (3) | `commented`, `already_commented`, `post_not_found`, `cannot_comment` | next step |

@@ -233,7 +233,7 @@ the ramp and the per-person spacing are unaffected by any of this.
 
 | Action | Params | Possible outcomes |
 |---|---|---|
-| `visit` | | `ok` |
+| `visit` | | `ok`, `profile_not_found` |
 | `follow` | | `followed`, `already_following`, `cannot_follow` |
 | `like_post` | `pick: newest` or `different_from_liked` | `liked`, `already_liked`, `post_not_found`, `cannot_like` |
 | `comment_post` | `pick`, `max_sentences` | `commented`, `already_commented`, `post_not_found`, `cannot_comment` |
@@ -248,7 +248,9 @@ the ramp and the per-person spacing are unaffected by any of this.
 
 1. If the step has `until_days` and the time is up, it goes to `on_result.timeout`.
 2. If `on_result` names the outcome, it goes there.
-3. `cannot_connect` and `cannot_message` end the lead as `cannot_contact`.
+3. `cannot_connect`, `cannot_message` and `profile_not_found` end the lead as `cannot_contact`.
+   A missing profile is confirmed by a second visit before it counts, and never trips
+   the circuit breaker.
 4. Any other success goes to the next step in the file that applies to the person's
    branch. After the last step the lead ends as `done`.
 5. A failure stalls the step until you `retry` or `skip` the lead.

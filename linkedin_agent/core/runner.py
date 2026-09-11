@@ -38,7 +38,13 @@ from . import messages as msg
 from . import sequence as seqeng
 from .errors import classify_error, classify_result
 from .limits import account_age_days, effective_cap, remaining
-from .status_map import apply_result, is_success, normalize_reply_check, normalize_status
+from .status_map import (
+    apply_result,
+    is_success,
+    normalize_missing_profile,
+    normalize_reply_check,
+    normalize_status,
+)
 from .tasks import build_prompt
 from .timezone import resolve_tz, schedule_in_window
 
@@ -338,8 +344,12 @@ async def process_task(task: Task, deps: Deps) -> Outcome:
     # A status the tables do not know must never route nowhere. Error-shaped results are
     # left for classify_result; anything else is snapped to a known status or made a
     # retryable failure.
+    result = normalize_missing_profile(task.action, result)
     if classify_result(result) is None:
         result = normalize_status(task.action, result)
+
+    if task.action == Action.VISIT and result.status == "profile_not_found":
+        result = _confirm_missing_profile(task, result)
 
     if task.action == Action.CONNECT and result.status == "cannot_connect":
         result = await _verify_cannot_connect(task, browser, deps, now)
@@ -392,6 +402,21 @@ CONNECT_VERIFY_MAP: dict[str, str] = {
     "pending": "already_pending",
     "connected": "already_connected",
 }
+
+
+def _confirm_missing_profile(task: Task, result: TaskResult) -> TaskResult:
+    """profile_not_found ends a lead for good, so one sighting is not enough.
+
+    A model reading a page that has not finished loading says "not found" too. The first
+    sighting comes back as a failure that is retried once and is not a breaker signal;
+    the second sighting stands. `attempts` is already incremented for the current run."""
+    if task.attempts >= 2:
+        return result
+    return TaskResult(
+        status="failed",
+        error="profile not found; looking once more before giving up on this lead",
+        data={**result.data, "profile_missing_once": True},
+    )
 
 
 async def _verify_cannot_connect(task: Task, browser: Any, deps: Deps, now: datetime) -> TaskResult:
@@ -584,6 +609,8 @@ async def _fail(
         note = f"circuit breaker tripped for {BREAKER_HOURS}h"
     elif kind == ErrorKind.OTHER and result.data.get("budget_exhausted"):
         note = "ran out of steps"  # retried like any failure; not a breaker signal
+    elif kind == ErrorKind.OTHER and result.data.get("profile_missing_once"):
+        note = "profile not found; confirming"  # the second sighting ends the lead
     elif kind == ErrorKind.OTHER:
         acct.consecutive_failures += 1
         if acct.consecutive_failures >= MAX_CONSECUTIVE_FAILURES:

@@ -100,6 +100,8 @@ def test_every_action_has_a_builder():
 def test_visit_prompt_is_read_only():
     p = build_prompt(Action.VISIT, URL, {})
     assert URL in p and "Do NOT click Connect" in p and "posted_days_ago" in p
+    # a profile that is gone has a named outcome, so the model does not improvise one
+    assert '"status": "profile_not_found"' in p
 
 
 def test_connect_prompt_offers_every_routed_status():
