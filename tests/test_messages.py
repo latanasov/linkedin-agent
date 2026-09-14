@@ -92,6 +92,29 @@ def test_ordinary_comments_are_not_caught_by_the_fabrication_check():
         assert msg.check_comment(ok) == [], ok
 
 
+def test_corporate_filler_is_rejected():
+    """The first three comments of the real campaign were safe and said nothing. Both of
+    the ones that read as committee-written are caught here."""
+    live = (
+        "The shift from features to architecture truly highlights the increasing "
+        "complexity in modern vehicle design.",
+        'The distinction between banking\'s "audit trail before live" and other sectors is '
+        "a critical insight.",
+    )
+    for text in live:
+        problems = msg.check_comment(text)
+        assert any("filler" in p for p in problems), text
+
+
+def test_the_voice_rules_are_in_the_comment_prompt():
+    for rule in (
+        "Write the way a person talks",
+        "Do not open by restating the post",
+        "Prefer its nouns",
+    ):
+        assert rule in msg.COMMENT_PROMPT, rule
+
+
 def test_check_comment_accepts_specific_comment_and_flags_company_mention():
     good = "Removing the approval step is the part most teams skip. Did the support load move elsewhere?"
     assert msg.check_comment(good) == []
