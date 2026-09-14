@@ -825,7 +825,7 @@ def log(
     async def go(app_: App) -> None:
         if comments:
             rows = await app_.deps.queue.raw(  # type: ignore[attr-defined]
-                "SELECT finished_at, params, profile_url FROM tasks "
+                "SELECT finished_at, params, profile_url, result FROM tasks "
                 "WHERE action='comment_post' AND status='done' ORDER BY finished_at DESC LIMIT ?",
                 (limit,),
             )
@@ -833,9 +833,18 @@ def log(
 
             for r in rows:
                 p = json.loads(r["params"] or "{}")
+                res = json.loads(r["result"] or "{}")
+                # The post's own URL, so a comment can be found and deleted by hand. The
+                # task reports it on success; fall back to the person's activity page.
+                where = (
+                    (res.get("data") or {}).get("post_url")
+                    or p.get("post_url")
+                    or f"{str(r['profile_url']).rstrip('/')}/recent-activity/all/"
+                )
                 _echo(
                     f"{(r['finished_at'] or '')[:16]}  {p.get('lead_name', r['profile_url'])}\n"
-                    f"    {p.get('text', '')}"
+                    f"    {p.get('text', '')}\n"
+                    f"    at {where}"
                 )
             if not rows:
                 _echo("No comments posted yet.")

@@ -64,6 +64,35 @@ BANNED_COMMENT_PHRASES = (
     "our solution",
 )
 
+# Claims of knowledge the writer cannot have. The model only sees the post; anything it
+# "heard", "saw" or "remembers" about the event, the people or the place is invented, and
+# it goes out under a real person's name. Seen live: "I heard the course was looking
+# particularly challenging that day" on a post about a golf outing.
+FABRICATION_MARKERS = (
+    "i heard",
+    "i've heard",
+    "i have heard",
+    "i hear ",
+    "i saw",
+    "i've seen",
+    "i was there",
+    "i was at",
+    "i remember",
+    "i recall",
+    "i know ",
+    "i met",
+    "someone told me",
+    "people tell me",
+    "word is",
+    "rumour has it",
+    "rumor has it",
+    "from what i gather",
+    "last time i",
+    "when i was",
+    "my experience",
+    "in my experience",
+)
+
 _LINK_RE = re.compile(r"(https?://|www\.|\b[a-z0-9-]+\.(com|io|ai|co|net|org)\b)", re.IGNORECASE)
 _SENTENCE_RE = re.compile(r"[^.!?]+[.!?]+|[^.!?]+$")
 
@@ -211,6 +240,9 @@ def check_comment(text: str, max_sentences: int = 3, campaign: Campaign | None =
     for phrase in BANNED_COMMENT_PHRASES:
         if phrase in low:
             problems.append(f"banned phrase: {phrase!r}")
+    for marker in FABRICATION_MARKERS:
+        if marker in low:
+            problems.append(f"claims knowledge the writer cannot have: {marker.strip()!r}")
     if _LINK_RE.search(t):
         problems.append("contains a link")
     n = len(sentences(t))
@@ -274,8 +306,13 @@ Post by {first_name} ({headline}):
 
 Rules:
 - 1 to {max_sentences} sentences, under 400 characters.
-- Add something the post did not already say: a specific observation, a related data point,
-  a counter-example, or a precise question that shows you read it.
+- Everything you know comes from the post above. Never claim to have heard, seen,
+  remembered or been told anything about the event, the people or the place. Nothing
+  that begins "I heard", "I saw", "I was there", "I remember" or "in my experience".
+  If the post is personal or social rather than professional, respond to what it says
+  in one or two warm, ordinary sentences and do not invent detail to sound familiar.
+- Add something the post did not already say: an observation about what it describes,
+  a general point that follows from it, or a precise question that shows you read it.
 - Refer to a concrete detail from the post.
 - No links. No product, company or tool names. No pitch. No "great post", "so true",
   "thanks for sharing" or similar praise-only openers. No hashtags. No emojis.

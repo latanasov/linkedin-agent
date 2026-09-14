@@ -64,11 +64,32 @@ def test_body_hash_normalises_whitespace_and_case():
         ("Check out acme.io today.", "link"),
         ("One. Two. Three. Four.", "4 sentences"),
         ("x" * 601 + ".", "longer than 600"),
+        # seen live: invented hearsay about a golf outing, posted under a real name
+        ("I heard the course was looking particularly challenging that day.", "cannot have"),
+        ("I was there for the keynote and the room was packed.", "cannot have"),
+        ("In my experience these migrations take twice as long.", "cannot have"),
+        ("Someone told me your team shipped this in a week.", "cannot have"),
     ],
 )
 def test_check_comment_rejects(text, problem):
     problems = msg.check_comment(text)
     assert any(problem in p for p in problems), problems
+
+
+def test_comment_prompt_forbids_invented_knowledge():
+    assert "Never claim to have heard, seen" in msg.COMMENT_PROMPT
+    assert '"I heard"' in msg.COMMENT_PROMPT
+    # the useful half of the old rule survives: react to what the post says
+    assert "precise question that shows you read it" in msg.COMMENT_PROMPT
+
+
+def test_ordinary_comments_are_not_caught_by_the_fabrication_check():
+    for ok in (
+        "Removing the approval step is the part most teams skip. Did the support load move elsewhere?",
+        "Congratulations to the whole team, a day away from screens is well earned.",
+        "Curious how you measured the onboarding time before and after.",
+    ):
+        assert msg.check_comment(ok) == [], ok
 
 
 def test_check_comment_accepts_specific_comment_and_flags_company_mention():

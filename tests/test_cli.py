@@ -20,6 +20,7 @@ from linkedin_agent.adapters.sqlite import (
 )
 from linkedin_agent.campaigns import load_all_user_campaigns
 from linkedin_agent.core.runner import Deps
+from linkedin_agent.models import Action, LeadStage, Task, TaskResult, TaskStatus
 from tests.conftest import NOW, FakeExecutor, FakeLLM, FakePool
 
 runner = CliRunner()
@@ -131,6 +132,46 @@ def test_import_preview_status_run_report(home, fakes, tmp_path):
     assert "visit" in r.output
     r = runner.invoke(cli.app, ["log", "--comments"])
     assert "No comments" in r.output
+
+
+def test_log_comments_prints_where_each_comment_went(home, fakes, tmp_path):
+    """Deleting a comment by hand needs the post's URL, not just its text."""
+    executor, pool, llm = fakes
+    runner.invoke(cli.app, ["campaign", "new", "mine"])
+    runner.invoke(cli.app, ["import", str(csv_file(tmp_path)), "--campaign", "mine"])
+
+    async def seed_comment() -> None:
+        app_ = await cli.build_app(cli._settings(), need_llm=False)
+        try:
+            leads = await app_.deps.leads.by_stage(LeadStage.NEW)
+            lead = leads[0]
+            t = Task(
+                lead_id=lead.id,
+                step_id="warm.comment",
+                action=Action.COMMENT_POST,
+                profile_url=lead.linkedin_url,
+                account="default",
+                params={"lead_name": "Jane Doe", "text": "Curious how you measured that."},
+                created_at=NOW,
+            )
+            await app_.deps.queue.enqueue(t)
+            await app_.deps.queue.claim(t.id, NOW)
+            await app_.deps.queue.finish(
+                t.id,
+                TaskResult(
+                    status="commented",
+                    data={"post_url": "https://www.linkedin.com/posts/janedoe_a-123"},
+                ),
+                TaskStatus.DONE,
+            )
+        finally:
+            await app_.db.close()
+
+    asyncio.run(seed_comment())
+    r = runner.invoke(cli.app, ["log", "--comments"])
+    assert r.exit_code == 0, r.output
+    assert "Curious how you measured that." in r.output
+    assert "at https://www.linkedin.com/posts/janedoe_a-123" in r.output
 
     r = runner.invoke(cli.app, ["inbox"])
     assert "Inbox empty" in r.output
