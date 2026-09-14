@@ -93,6 +93,36 @@ FABRICATION_MARKERS = (
     "in my experience",
 )
 
+# Filler that makes a comment read as written by a committee rather than a person. Seen
+# live on the first three comments of a real campaign: "the shift ... truly highlights the
+# increasing complexity", "the distinction ... is a critical insight". None of it is wrong,
+# none of it says anything, and it does not sound like the person whose name is on it.
+CORPORATE_FILLER = (
+    "truly",
+    "really ",
+    "absolutely",
+    "incredibly",
+    "undoubtedly",
+    "definitely",
+    "significantly",
+    "critical insight",
+    "key insight",
+    "valuable insight",
+    "important insight",
+    "great point",
+    "important point",
+    "highlights the importance",
+    "underscores the",
+    "speaks volumes",
+    "cannot be overstated",
+    "game changer",
+    "game-changer",
+    "paradigm shift",
+    "the intersection of",
+    "at the end of the day",
+    "fascinating to see",
+)
+
 _LINK_RE = re.compile(r"(https?://|www\.|\b[a-z0-9-]+\.(com|io|ai|co|net|org)\b)", re.IGNORECASE)
 _SENTENCE_RE = re.compile(r"[^.!?]+[.!?]+|[^.!?]+$")
 
@@ -243,6 +273,9 @@ def check_comment(text: str, max_sentences: int = 3, campaign: Campaign | None =
     for marker in FABRICATION_MARKERS:
         if marker in low:
             problems.append(f"claims knowledge the writer cannot have: {marker.strip()!r}")
+    for filler in CORPORATE_FILLER:
+        if filler in low:
+            problems.append(f"filler that says nothing: {filler.strip()!r}")
     if _LINK_RE.search(t):
         problems.append("contains a link")
     n = len(sentences(t))
@@ -314,6 +347,15 @@ Rules:
 - Add something the post did not already say: an observation about what it describes,
   a general point that follows from it, or a precise question that shows you read it.
 - Refer to a concrete detail from the post.
+- Write the way a person talks. Short, plain words. Contractions are fine. No "truly",
+  "really", "significantly", "undoubtedly" or any other word that adds no information.
+- Do not open by restating the post or grading it. "The shift from X to Y is a critical
+  insight" and "this highlights the growing complexity of Z" are not comments, they are
+  summaries. Start with your own point instead.
+- Name the concrete thing the post names. Prefer its nouns (the approval step, the
+  gearbox, the audit trail) over abstractions like complexity, evolution, transformation,
+  landscape or journey.
+- A question is worth asking only if a practitioner would actually ask it.
 - No links. No product, company or tool names. No pitch. No "great post", "so true",
   "thanks for sharing" or similar praise-only openers. No hashtags. No emojis.
 - Plain text only. Output the comment and nothing else."""
