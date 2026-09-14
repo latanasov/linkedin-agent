@@ -35,6 +35,15 @@ JSON_ONLY_RULE = (
     "no markdown fences."
 )
 
+# Every task that lands on a profile carries this line, so a profile that is gone has one
+# named outcome instead of a different improvised failure per action (status_map turns the
+# error-shaped variants a model still produces into the same status).
+MISSING_PROFILE_RULE = (
+    'If LinkedIn says the page does not exist ("This page doesn\'t exist", "Page not found", '
+    '"profile not available") or sends you to a search page or the home feed instead of the '
+    'profile, return {"status": "profile_not_found", "error": null} and nothing else.'
+)
+
 
 def validate_linkedin_url(url: str) -> str:
     if not LINKEDIN_URL_RE.match(url or ""):

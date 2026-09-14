@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..prompts import JSON_ONLY_RULE, validate_linkedin_url
+from ..prompts import JSON_ONLY_RULE, MISSING_PROFILE_RULE, validate_linkedin_url
 
 
 def build_prompt(profile_url: str, params: dict[str, Any]) -> str:
@@ -11,6 +11,7 @@ def build_prompt(profile_url: str, params: dict[str, Any]) -> str:
 
 1. Navigate to: {profile_url}
 2. If the page shows a login form or checkpoint, return {{"status": "failed", "error": "login_required"}}.
+   {MISSING_PROFILE_RULE}
 3. Look for a "Follow" button in the profile header. If it is not there, open the "More"
    menu next to the Connect/Message buttons and look for "Follow" inside it.
 4. If you see "Following" (already following), return {{"status": "already_following", "error": null}}.

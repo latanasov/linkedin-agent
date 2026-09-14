@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..prompts import JSON_ONLY_RULE, validate_linkedin_url
+from ..prompts import JSON_ONLY_RULE, MISSING_PROFILE_RULE, validate_linkedin_url
 
 
 def build_prompt(profile_url: str, params: dict[str, Any]) -> str:
@@ -13,9 +13,7 @@ def build_prompt(profile_url: str, params: dict[str, Any]) -> str:
 1. Navigate to: {profile_url}
 2. Wait for the page to load. If it shows a login form, an "authwall", or a security
    checkpoint, stop and return {{"status": "failed", "error": "login_required"}}.
-   If LinkedIn says the page does not exist ("This page doesn't exist", "Page not found",
-   "profile not available") or sends you to a search page or the home feed instead of a
-   profile, return {{"status": "profile_not_found", "error": null}} and nothing else.
+   {MISSING_PROFILE_RULE}
 3. From the profile header and About section, read:
    - full_name
    - headline (the line under the name)

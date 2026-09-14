@@ -23,13 +23,32 @@ SUCCESS_STATUSES: dict[Action, frozenset[str]] = {
     Action.CHECK_REPLIES: frozenset({"replied", "none", "no_thread"}),
 }
 
+# Every action that opens the prospect's profile (or their activity page). Each may find
+# that the profile is gone, and a gone profile means the same thing whichever step sees it.
+MISSING_PROFILE_ACTIONS: frozenset[Action] = frozenset(
+    {
+        Action.VISIT,
+        Action.FOLLOW,
+        Action.LIKE_POST,
+        Action.COMMENT_POST,
+        Action.CONNECT,
+        Action.CHECK_CONNECTION,
+        Action.WITHDRAW_INVITE,
+        Action.MESSAGE,
+        Action.INMAIL,
+    }
+)
+
 # Result statuses that mean the prospect cannot be contacted on this path at all.
 CANNOT_CONTACT_STATUSES: dict[Action, frozenset[str]] = {
-    Action.VISIT: frozenset({"profile_not_found"}),
     Action.MESSAGE: frozenset({"not_connected", "cannot_message"}),
     Action.INMAIL: frozenset({"cannot_message"}),
     Action.CONNECT: frozenset({"cannot_connect"}),
 }
+for _action in MISSING_PROFILE_ACTIONS:
+    CANNOT_CONTACT_STATUSES[_action] = CANNOT_CONTACT_STATUSES.get(_action, frozenset()) | {
+        "profile_not_found"
+    }
 
 # Statuses that are neither success nor "cannot contact": the step is simply not applicable
 # (post gone, nothing to withdraw). The sequence moves on without a retry.
@@ -58,8 +77,8 @@ def known_statuses(action: Action) -> frozenset[str]:
     )
 
 
-# Error strings a visit prompt produces for a profile that is not there. The prompt asks
-# for the status form; models still answer with status="failed" and one of these.
+# Error strings a prompt produces for a profile that is not there. The prompts ask for the
+# status form; models still answer with status="failed" and one of these.
 _MISSING_PROFILE_ERRORS = (
     "profile_not_found",
     "page_not_found",
@@ -75,11 +94,12 @@ _MISSING_PROFILE_ERRORS = (
 
 
 def normalize_missing_profile(action: Action, result: TaskResult) -> TaskResult:
-    """A visit that failed *because the profile is gone* is a profile_not_found.
+    """A profile step that failed *because the profile is gone* is a profile_not_found.
 
     Left as a plain failure it would be retried to exhaustion and every attempt would
-    count toward the circuit breaker, for a condition no retry can change."""
-    if action != Action.VISIT or result.status not in ("failed", "error"):
+    count toward the circuit breaker, for a condition no retry can change. Seen live on a
+    visit first, then on a follow of a profile that had vanished since its visit."""
+    if action not in MISSING_PROFILE_ACTIONS or result.status not in ("failed", "error"):
         return result
     probe = (result.error or "").lower()
     if not any(k in probe for k in _MISSING_PROFILE_ERRORS):

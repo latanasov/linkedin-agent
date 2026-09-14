@@ -39,6 +39,7 @@ from . import sequence as seqeng
 from .errors import classify_error, classify_result
 from .limits import account_age_days, effective_cap, remaining
 from .status_map import (
+    MISSING_PROFILE_ACTIONS,
     apply_result,
     is_success,
     normalize_missing_profile,
@@ -348,7 +349,7 @@ async def process_task(task: Task, deps: Deps) -> Outcome:
     if classify_result(result) is None:
         result = normalize_status(task.action, result)
 
-    if task.action == Action.VISIT and result.status == "profile_not_found":
+    if task.action in MISSING_PROFILE_ACTIONS and result.status == "profile_not_found":
         result = _confirm_missing_profile(task, result)
 
     if task.action == Action.CONNECT and result.status == "cannot_connect":
@@ -409,7 +410,9 @@ def _confirm_missing_profile(task: Task, result: TaskResult) -> TaskResult:
 
     A model reading a page that has not finished loading says "not found" too. The first
     sighting comes back as a failure that is retried once and is not a breaker signal;
-    the second sighting stands. `attempts` is already incremented for the current run."""
+    the second sighting stands. `attempts` is already incremented for the current run.
+    Applies to every step that opens the profile, not only the visit: a profile can
+    vanish between the visit and the follow, and did."""
     if task.attempts >= 2:
         return result
     return TaskResult(
