@@ -234,14 +234,14 @@ the ramp and the per-person spacing are unaffected by any of this.
 | Action | Params | Possible outcomes |
 |---|---|---|
 | `visit` | | `ok`, `profile_not_found` |
-| `follow` | | `followed`, `already_following`, `cannot_follow` |
-| `like_post` | `pick: newest` or `different_from_liked` | `liked`, `already_liked`, `post_not_found`, `cannot_like` |
-| `comment_post` | `pick`, `max_sentences` | `commented`, `already_commented`, `post_not_found`, `cannot_comment` |
-| `connect` | `note_template` | `sent`, `already_pending`, `already_connected`, `cannot_connect` |
-| `check_connection` | `repeat_every`, `until_days` | `connected`, `pending`, `not_connected`, `no_option` |
-| `withdraw_invite` | | `withdrawn`, `not_pending` |
-| `message` | `template` | `sent`, `not_connected`, `cannot_message` |
-| `inmail` | `template`, `subject_template` | `sent`, `cannot_message` |
+| `follow` | | `followed`, `already_following`, `cannot_follow`, `profile_not_found` |
+| `like_post` | `pick: newest` or `different_from_liked` | `liked`, `already_liked`, `post_not_found`, `cannot_like`, `profile_not_found` |
+| `comment_post` | `pick`, `max_sentences` | `commented`, `already_commented`, `post_not_found`, `cannot_comment`, `profile_not_found` |
+| `connect` | `note_template` | `sent`, `already_pending`, `already_connected`, `cannot_connect`, `profile_not_found` |
+| `check_connection` | `repeat_every`, `until_days` | `connected`, `pending`, `not_connected`, `no_option`, `profile_not_found` |
+| `withdraw_invite` | | `withdrawn`, `not_pending`, `profile_not_found` |
+| `message` | `template` | `sent`, `not_connected`, `cannot_message`, `profile_not_found` |
+| `inmail` | `template`, `subject_template` | `sent`, `cannot_message`, `profile_not_found` |
 | `check_replies` | `repeat_every`, `until_days` | `replied`, `none`, `no_thread` |
 
 ### Where a step goes next
@@ -249,8 +249,9 @@ the ramp and the per-person spacing are unaffected by any of this.
 1. If the step has `until_days` and the time is up, it goes to `on_result.timeout`.
 2. If `on_result` names the outcome, it goes there.
 3. `cannot_connect`, `cannot_message` and `profile_not_found` end the lead as `cannot_contact`.
-   A missing profile is confirmed by a second visit before it counts, and never trips
-   the circuit breaker.
+   Every step that opens the profile can return `profile_not_found` (a profile can vanish
+   between the visit and the follow). A missing profile is confirmed by a second look
+   before it counts, and never trips the circuit breaker.
 4. Any other success goes to the next step in the file that applies to the person's
    branch. After the last step the lead ends as `done`.
 5. A failure stalls the step until you `retry` or `skip` the lead.

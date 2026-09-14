@@ -1,4 +1,5 @@
 from linkedin_agent.core.status_map import (
+    MISSING_PROFILE_ACTIONS,
     apply_result,
     is_cannot_contact,
     is_soft_skip,
@@ -133,16 +134,44 @@ def test_missing_profile_ends_the_lead_and_is_left_alone_by_normalize_status():
     assert normalize_status(Action.VISIT, r) is r
 
 
-def test_normalize_missing_profile_maps_error_shaped_reports_for_visits_only():
-    for err in ("page_not_found", "profile_not_found", "This page doesn't exist", "HTTP 404"):
-        r = normalize_missing_profile(Action.VISIT, TaskResult(status="failed", error=err))
-        assert r.status == "profile_not_found", err
-        assert r.data["reported_status"] == "failed" and r.data["reported_error"] == err
-    # other visit failures, and other actions, are untouched
+def test_every_profile_step_treats_a_missing_profile_as_cannot_contact():
+    """Seen live: a profile visited fine on Wednesday was gone by Monday, and the follow
+    failed page_not_found three times, each a strike toward the breaker."""
+    assert MISSING_PROFILE_ACTIONS == {
+        Action.VISIT,
+        Action.FOLLOW,
+        Action.LIKE_POST,
+        Action.COMMENT_POST,
+        Action.CONNECT,
+        Action.CHECK_CONNECTION,
+        Action.WITHDRAW_INVITE,
+        Action.MESSAGE,
+        Action.INMAIL,
+    }
+    for action in MISSING_PROFILE_ACTIONS:
+        r = TaskResult(status="profile_not_found")
+        assert is_cannot_contact(action, r) and not is_success(action, r), action
+        assert normalize_status(action, r) is r, action
+        lead = make_lead(stage=LeadStage.WARMING)
+        assert apply_result(lead, action, r, NOW).stage == LeadStage.CANNOT_CONTACT, action
+    # the two actions that never open the profile are untouched
+    assert not is_cannot_contact(Action.CHECK_REPLIES, TaskResult(status="profile_not_found"))
+    # the other cannot-contact statuses are still there
+    assert is_cannot_contact(Action.CONNECT, TaskResult(status="cannot_connect"))
+    assert is_cannot_contact(Action.MESSAGE, TaskResult(status="not_connected"))
+
+
+def test_normalize_missing_profile_maps_error_shaped_reports_for_every_profile_step():
+    for action in MISSING_PROFILE_ACTIONS:
+        for err in ("page_not_found", "profile_not_found", "This page doesn't exist", "HTTP 404"):
+            r = normalize_missing_profile(action, TaskResult(status="failed", error=err))
+            assert r.status == "profile_not_found", (action, err)
+            assert r.data["reported_status"] == "failed" and r.data["reported_error"] == err
+    # other failures, and actions that never open the profile, are untouched
     keep = TaskResult(status="failed", error="max_steps_reached")
-    assert normalize_missing_profile(Action.VISIT, keep) is keep
+    assert normalize_missing_profile(Action.FOLLOW, keep) is keep
     other = TaskResult(status="failed", error="page_not_found")
-    assert normalize_missing_profile(Action.LIKE_POST, other) is other
+    assert normalize_missing_profile(Action.CHECK_REPLIES, other) is other
     ok = TaskResult(status="ok", error="page_not_found")  # not a failure: leave it
     assert normalize_missing_profile(Action.VISIT, ok) is ok
 

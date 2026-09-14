@@ -2,7 +2,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..prompts import JSON_ONLY_RULE, sanitize_user_text, validate_linkedin_url
+from ..prompts import (
+    JSON_ONLY_RULE,
+    MISSING_PROFILE_RULE,
+    sanitize_user_text,
+    validate_linkedin_url,
+)
 
 
 def build_prompt(profile_url: str, params: dict[str, Any]) -> str:
@@ -18,6 +23,7 @@ def build_prompt(profile_url: str, params: dict[str, Any]) -> str:
 
 1. Navigate to: {profile_url}
 2. If the page shows a login form or checkpoint, return {{"status": "failed", "error": "login_required"}}.
+   {MISSING_PROFILE_RULE}
 3. Click the "Message" or "InMail" button on the profile.
 4. If an existing conversation is shown, note the first 100 characters of the most
    recent message written by THEM (you will return it as "prior_reply_text"; empty if none).

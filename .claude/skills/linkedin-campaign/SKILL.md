@@ -180,15 +180,15 @@ If a like/comment step has no post to act on it is skipped even on the posts bra
 
 | Action | Params | Statuses it can return | Default when not routed |
 |---|---|---|---|
-| `visit` | – | `ok`, `profile_not_found` | next step; also decides the branch and time zone. `profile_not_found` ends the lead as `cannot_contact` after a confirming second visit |
-| `follow` | – | `followed`, `already_following`, `cannot_follow` | next step |
-| `like_post` | `pick: newest \| different_from_liked` | `liked`, `already_liked`, `post_not_found`, `cannot_like` | next step |
-| `comment_post` | `pick`, `max_sentences` (3) | `commented`, `already_commented`, `post_not_found`, `cannot_comment` | next step |
-| `connect` | `note_template` (or blank) | `sent`, `already_pending`, `already_connected`, `cannot_connect` | `cannot_connect` → `end:cannot_contact`; others next step |
-| `check_connection` | `repeat_every`, `until_days` | `connected`, `pending`, `not_connected`, `no_option` | route explicitly; `no_option` stalls |
-| `withdraw_invite` | – | `withdrawn`, `not_pending` | next step |
-| `message` | `template`, `allow_identical`, `skip_reply_check` | `sent`, `not_connected`, `cannot_message` | `not_connected`/`cannot_message` → `end:cannot_contact` |
-| `inmail` | `template`, `subject_template` | `sent`, `cannot_message` | `cannot_message` → `end:cannot_contact` |
+| `visit` | – | `ok`, `profile_not_found` | next step; also decides the branch and time zone. `profile_not_found` ends the lead as `cannot_contact` after a confirming second look (every action below that opens the profile can return it too, same handling) |
+| `follow` | – | `followed`, `already_following`, `cannot_follow`, `profile_not_found` | next step |
+| `like_post` | `pick: newest \| different_from_liked` | `liked`, `already_liked`, `post_not_found`, `cannot_like`, `profile_not_found` | next step |
+| `comment_post` | `pick`, `max_sentences` (3) | `commented`, `already_commented`, `post_not_found`, `cannot_comment`, `profile_not_found` | next step |
+| `connect` | `note_template` (or blank) | `sent`, `already_pending`, `already_connected`, `cannot_connect`, `profile_not_found` | `cannot_connect`/`profile_not_found` → `end:cannot_contact`; others next step |
+| `check_connection` | `repeat_every`, `until_days` | `connected`, `pending`, `not_connected`, `no_option`, `profile_not_found` | route explicitly; `no_option` stalls |
+| `withdraw_invite` | – | `withdrawn`, `not_pending`, `profile_not_found` | next step |
+| `message` | `template`, `allow_identical`, `skip_reply_check` | `sent`, `not_connected`, `cannot_message`, `profile_not_found` | `not_connected`/`cannot_message`/`profile_not_found` → `end:cannot_contact` |
+| `inmail` | `template`, `subject_template` | `sent`, `cannot_message`, `profile_not_found` | `cannot_message`/`profile_not_found` → `end:cannot_contact` |
 | `check_replies` | `repeat_every`, `until_days` | `replied`, `none`, `no_thread` | route explicitly |
 
 `repeat_every` and `until_days` only make sense with `on_result` routing the step to

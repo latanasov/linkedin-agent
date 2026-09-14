@@ -959,11 +959,11 @@ def test_visit_has_room_for_a_long_profile():
 # ── a profile that no longer exists ends the lead, and never trips the breaker ──
 
 
-async def _visit_missing_twice(deps, executor, scripted):
-    """Run the visit step twice with the same scripted result; return both outcomes."""
-    lead, _ = await seed(deps)
-    executor.script(Action.VISIT, scripted)
-    t = await enqueue_step(deps, lead, "warm.visit")
+async def _visit_missing_twice(deps, executor, scripted, action=Action.VISIT, step="warm.visit"):
+    """Run one profile step twice with the same scripted result; return both outcomes."""
+    lead, _ = await seed(deps, step=step, branch="posts")
+    executor.script(action, scripted)
+    t = await enqueue_step(deps, lead, step)
     first = await process_task(t, deps)
     acct_after_first = await deps.accounts.get("default")
     t = await deps.queue.get(t.id)
@@ -1019,6 +1019,43 @@ async def test_a_false_missing_profile_sighting_recovers_on_the_second_look(deps
     second = await process_task(t, deps)
     assert second.status == TaskStatus.DONE and second.result.status == "ok"
     assert (await deps.leads.get(lead.id)).stage == LeadStage.WARMING
+
+
+async def test_a_profile_that_vanished_after_its_visit_ends_the_lead_at_the_follow(deps, executor):
+    """Seen live: visited on Wednesday, gone by Monday. The follow answered
+    failed/page_not_found three times and each counted toward the breaker."""
+    acct = await deps.accounts.get("default")
+    acct.consecutive_failures = 2
+    await deps.accounts.save(acct)
+    lead, first, acct, second = await _visit_missing_twice(
+        deps,
+        executor,
+        {"status": "failed", "error": "page_not_found"},
+        action=Action.FOLLOW,
+        step="warm.follow",
+    )
+    assert first.status == TaskStatus.QUEUED and "confirming" in first.note
+    assert acct.consecutive_failures == 2 and acct.tripped_until is None
+    assert second.status == TaskStatus.DONE and second.result.status == "profile_not_found"
+    assert (await deps.leads.get(lead.id)).stage == LeadStage.CANNOT_CONTACT
+    assert (await deps.leads.get_sequence(lead.id)).step_id is None
+    assert (await deps.accounts.get("default")).consecutive_failures == 0
+
+
+async def test_a_connect_to_a_missing_profile_ends_the_lead_without_a_verify_probe(deps, executor):
+    """The connect step gets the same treatment, and the read-only cannot_connect check
+    is not run against a page that is not there."""
+    lead, first, _, second = await _visit_missing_twice(
+        deps,
+        executor,
+        {"status": "profile_not_found", "error": None},
+        action=Action.CONNECT,
+        step="invite.posts",
+    )
+    assert first.status == TaskStatus.QUEUED and "confirming" in first.note
+    assert second.status == TaskStatus.DONE and second.result.status == "profile_not_found"
+    assert (await deps.leads.get(lead.id)).stage == LeadStage.CANNOT_CONTACT
+    assert not any(c.action == Action.CHECK_CONNECTION for c in executor.calls)
 
 
 async def test_other_visit_failures_still_count_toward_the_breaker(deps, executor):

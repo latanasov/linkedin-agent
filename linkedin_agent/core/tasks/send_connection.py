@@ -2,7 +2,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..prompts import JSON_ONLY_RULE, sanitize_user_text, validate_linkedin_url
+from ..prompts import (
+    JSON_ONLY_RULE,
+    MISSING_PROFILE_RULE,
+    sanitize_user_text,
+    validate_linkedin_url,
+)
 
 
 def build_prompt(profile_url: str, params: dict[str, Any]) -> str:
@@ -20,6 +25,7 @@ def build_prompt(profile_url: str, params: dict[str, Any]) -> str:
 
 1. Navigate to: {profile_url}
 2. If the page shows a login form or checkpoint, return {{"status": "failed", "error": "login_required"}}.
+   {MISSING_PROFILE_RULE}
 3. Look at the buttons in the profile header AND open the "More" menu to see what it holds:
    - A "Pending" button in the header, or "Pending" / "Withdraw" inside "More": a request is
      already out. Return {{"status": "already_pending", "error": null}}.

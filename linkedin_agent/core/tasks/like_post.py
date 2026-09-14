@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..prompts import JSON_ONLY_RULE, validate_linkedin_url, validate_post_url
+from ..prompts import JSON_ONLY_RULE, MISSING_PROFILE_RULE, validate_linkedin_url, validate_post_url
 
 
 def _target_block(profile_url: str, post_url: str | None, post_text: str) -> str:
@@ -24,6 +24,7 @@ def build_prompt(profile_url: str, params: dict[str, Any]) -> str:
 
 {_target_block(profile_url, post_url, post_text)}
 2. If the page shows a login form or checkpoint, return {{"status": "failed", "error": "login_required"}}.
+   {MISSING_PROFILE_RULE}
 3. If the post cannot be found, return {{"status": "post_not_found", "error": null}}.
 4. Look at the "Like" button under the post. If it already shows as pressed/active
    (e.g. "Liked" or a filled thumb icon), return {{"status": "already_liked", "error": null, "post_url": "<url>"}}.

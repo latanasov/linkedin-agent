@@ -40,8 +40,9 @@ All three checks must pass before a push; CI runs the same three.
 - Four verdicts are verified before they are believed, each because it misfired in a
   real run: `cannot_connect` (read-only re-check), `login_required` (feed page load),
   `replied` (position relative to our message plus `lead.prior_reply_text`), and a
-  visit's `profile_not_found` (a second sighting on retry; the first is requeued and
-  never counts toward the breaker). See `core/runner.py` and `core/status_map`.
+  `profile_not_found` from any step that opens the profile (a second sighting on retry;
+  the first is requeued and never counts toward the breaker). See `core/runner.py` and
+  `core/status_map`.
 - A retried message checks the thread first (`_already_sent`) so a lost confirmation
   never becomes a duplicate send.
 - `process_task` builds the prompt before touching the browser: a task whose parameters

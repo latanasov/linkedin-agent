@@ -87,9 +87,9 @@ docs/
   stage, on purpose.
 - **A `cannot_connect` is verified** by a read-only check before it ends a lead.
   A `login_required` is verified by loading the feed. A `replied` is normalised against
-  position and the prior reply text. A visit's `profile_not_found` is believed only on
-  a second sighting, and the first never counts toward the breaker. These exist because
-  each came up in a real run.
+  position and the prior reply text. A `profile_not_found` from any step that opens the
+  profile is believed only on a second sighting, and the first never counts toward the
+  breaker. These exist because each came up in a real run.
 - **A retried message checks the thread first** (`_already_sent`) so a lost
   confirmation never becomes a duplicate send.
 - **The browser pool requires a focused tab** before every task (`ensure_tab`). Without

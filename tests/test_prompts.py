@@ -10,6 +10,7 @@ from linkedin_agent.core.prompts import (
     sanitize_user_text,
     validate_linkedin_url,
 )
+from linkedin_agent.core.status_map import MISSING_PROFILE_ACTIONS
 from linkedin_agent.core.tasks import PROMPT_BUILDERS, build_prompt
 from linkedin_agent.models import Action
 
@@ -102,6 +103,22 @@ def test_visit_prompt_is_read_only():
     assert URL in p and "Do NOT click Connect" in p and "posted_days_ago" in p
     # a profile that is gone has a named outcome, so the model does not improvise one
     assert '"status": "profile_not_found"' in p
+
+
+def test_every_profile_step_names_the_missing_profile_outcome():
+    """A dead profile has one outcome whichever step sees it; the model must not have to
+    improvise a different failure per action."""
+    params = {
+        Action.MESSAGE: {"text": "hi"},
+        Action.INMAIL: {"subject": "s", "text": "hi"},
+        Action.COMMENT_POST: {"text": "nice"},
+    }
+    for action in MISSING_PROFILE_ACTIONS:
+        p = build_prompt(action, URL, params.get(action, {}))
+        assert '"status": "profile_not_found"' in p, action
+        assert "search page or the home feed" in p, action
+    # the reply check opens the inbox, not the profile: no such outcome there
+    assert '"status": "profile_not_found"' not in build_prompt(Action.CHECK_REPLIES, URL, {})
 
 
 def test_connect_prompt_offers_every_routed_status():

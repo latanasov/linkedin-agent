@@ -2,7 +2,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..prompts import JSON_ONLY_RULE, sanitize_user_text, validate_linkedin_url, validate_post_url
+from ..prompts import (
+    JSON_ONLY_RULE,
+    MISSING_PROFILE_RULE,
+    sanitize_user_text,
+    validate_linkedin_url,
+    validate_post_url,
+)
 
 
 def build_prompt(profile_url: str, params: dict[str, Any]) -> str:
@@ -25,6 +31,7 @@ def build_prompt(profile_url: str, params: dict[str, Any]) -> str:
 
 {target}
 2. If the page shows a login form or checkpoint, return {{"status": "failed", "error": "login_required"}}.
+   {MISSING_PROFILE_RULE}
 3. If the post cannot be found or comments are disabled, return {{"status": "post_not_found", "error": null}}.
 4. Open the comments under the post and look for one written by the logged-in account
    (you). If there already is one, do NOT post again: return
