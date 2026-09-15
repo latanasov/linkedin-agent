@@ -14,11 +14,11 @@ def build_prompt(profile_url: str, params: dict[str, Any]) -> str:
     profile_url = validate_linkedin_url(profile_url)
     note = sanitize_user_text(str(params.get("note") or ""), max_length=300).strip()
     if note:
-        note_steps = f"""4. A dialog asks "Add a note to your invitation?" with the buttons
-   "Add a note" and "Send without a note". Click "Add a note". If no dialog appears and a
-   note box is already open, go straight to the next step.
+        note_steps = f"""4. Click "Add a note" if you see it. LinkedIn has several variants
+   of this dialog and some open the note box directly: whatever you see, get to a box you
+   can type the note into, and do not click "Send without a note".
 5. Type exactly (do not change it): {note}
-6. Click "Send". Do not click "Send without a note"."""
+6. Click "Send"."""
     else:
         note_steps = """4. If a dialog asks whether to add a note, choose "Send without a note".
 5. If a dialog asks "How do you know this person?", select "Other" and continue.

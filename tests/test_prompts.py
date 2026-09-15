@@ -128,12 +128,13 @@ def test_connect_prompt_offers_every_routed_status():
     assert "Withdraw" in p and '"1st"' in p
 
 
-def test_connect_prompt_names_the_note_dialog_and_its_wrong_button():
-    """Seen live: 12 steps ran out twice on the note path. The dialog is named so the
-    model does not spend steps working out which of its two buttons to press."""
+def test_connect_prompt_does_not_tie_the_note_path_to_one_dialog():
+    """Naming one dialog exactly ("Add a note to your invitation?") broke six invites in
+    a row: LinkedIn shows variants, and the model hunted for wording that was not there
+    instead of typing in the box in front of it."""
     p = build_prompt(Action.CONNECT, URL, {"note": "Hi there"})
-    assert "Add a note to your invitation?" in p
-    assert 'Do not click "Send without a note"' in p
+    assert "Add a note to your invitation?" not in p
+    assert "several variants" in p and 'do not click "Send without a note"' in p
 
 
 def test_connect_has_room_for_the_longest_flow_we_have():
