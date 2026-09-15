@@ -25,6 +25,18 @@ MAX_STEPS: dict[Action, int] = {
 }
 
 
+# Consecutive step errors browser-use tolerates before it abandons the run (its default
+# is 2). A connect opens a dialog, and the moment it animates in, every element index the
+# model just read goes stale: one bad click, one re-read, and it must succeed at once or
+# the run dies with "Element index N not available". Seen live on two profiles in one
+# afternoon. The extra room is for that re-read, not for flailing: the step cap still holds.
+MAX_FAILURES: dict[Action, int] = {
+    Action.CONNECT: 4,
+    Action.MESSAGE: 4,
+    Action.INMAIL: 4,
+}
+
+
 class BrowserUseExecutor:
     def __init__(
         self, llm: Any, *, llm_timeout_s: int | None = None, step_timeout_s: int | None = None
@@ -40,6 +52,7 @@ class BrowserUseExecutor:
             browser,
             self._llm,
             max_steps=MAX_STEPS.get(task.action, 10),
+            max_failures=MAX_FAILURES.get(task.action, 2),
             llm_timeout_s=self._llm_timeout_s,
             step_timeout_s=self._step_timeout_s,
         )
