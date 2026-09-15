@@ -154,6 +154,23 @@ def test_connect_prompt_pauses_after_the_clicks_that_open_a_dialog():
     assert "Wait 1 second, look at the dialog again" in p
 
 
+def test_connect_prompt_recovers_a_note_linkedin_did_not_register():
+    """Seen live: a profile whose Send button stayed grey three times while the same note
+    sent fine by hand. The text goes in without LinkedIn's input event; the message prompt
+    already re-types on an empty box, and the connect prompt now does the same plus a
+    keystroke to wake the button."""
+    p = build_prompt(Action.CONNECT, URL, {"note": "Hi there"})
+    assert "If the box is still empty, click into it" in p
+    assert "grey or nothing happens" in p and "type one space, delete it" in p
+    # steps stay contiguous whichever branch is taken
+    for steps in (
+        build_prompt(Action.CONNECT, URL, {"note": "x"}),
+        build_prompt(Action.CONNECT, URL, {}),
+    ):
+        nums = [int(line.split(".")[0]) for line in steps.splitlines() if line[:1].isdigit()]
+        assert nums == list(range(1, len(nums) + 1)), nums
+
+
 def test_connect_prompt_with_and_without_note():
     with_note = build_prompt(Action.CONNECT, URL, {"note": "Enjoyed your post."})
     assert "Add a note" in with_note and "Enjoyed your post." in with_note
