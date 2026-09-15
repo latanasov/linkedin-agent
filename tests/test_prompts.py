@@ -128,6 +128,20 @@ def test_connect_prompt_offers_every_routed_status():
     assert "Withdraw" in p and '"1st"' in p
 
 
+def test_connect_prompt_names_the_note_dialog_and_its_wrong_button():
+    """Seen live: 12 steps ran out twice on the note path. The dialog is named so the
+    model does not spend steps working out which of its two buttons to press."""
+    p = build_prompt(Action.CONNECT, URL, {"note": "Hi there"})
+    assert "Add a note to your invitation?" in p
+    assert 'Do not click "Send without a note"' in p
+
+
+def test_connect_has_room_for_the_longest_flow_we_have():
+    from linkedin_agent.adapters.browser_use_executor import MAX_STEPS
+
+    assert MAX_STEPS[Action.CONNECT] >= 16
+
+
 def test_connect_prompt_with_and_without_note():
     with_note = build_prompt(Action.CONNECT, URL, {"note": "Enjoyed your post."})
     assert "Add a note" in with_note and "Enjoyed your post." in with_note

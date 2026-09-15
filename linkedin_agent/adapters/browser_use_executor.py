@@ -8,6 +8,9 @@ from ..core.prompts import run_linkedin_agent
 from ..core.tasks import build_prompt
 from ..models import Action, Task, TaskResult
 
+# Steps browser-use may spend per action. The note path of a connect is the longest
+# flow we have (header, More menu, Connect, the note dialog, type, verify, Send, verify
+# Pending), and 12 ran out on a real profile twice in a row.
 MAX_STEPS: dict[Action, int] = {
     Action.VISIT: 12,
     Action.CHECK_CONNECTION: 6,
@@ -15,7 +18,7 @@ MAX_STEPS: dict[Action, int] = {
     Action.FOLLOW: 8,
     Action.LIKE_POST: 8,
     Action.COMMENT_POST: 12,
-    Action.CONNECT: 12,
+    Action.CONNECT: 16,
     Action.WITHDRAW_INVITE: 8,
     Action.MESSAGE: 16,
     Action.INMAIL: 16,
