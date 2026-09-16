@@ -142,7 +142,7 @@ def test_connect_prompt_does_not_tie_the_note_path_to_one_dialog():
 def test_connect_has_room_for_the_longest_flow_we_have():
     from linkedin_agent.adapters.browser_use_executor import MAX_FAILURES, MAX_STEPS
 
-    assert MAX_STEPS[Action.CONNECT] >= 16
+    assert MAX_STEPS[Action.CONNECT] >= 20  # room for the no-note fallback
     # Two profiles in one afternoon died two actions after the note dialog opened: one
     # stale index, one re-read, and browser-use's default of 2 consecutive errors was
     # spent. The dialog-opening actions get room for that re-read.
@@ -153,7 +153,15 @@ def test_connect_has_room_for_the_longest_flow_we_have():
 def test_connect_prompt_pauses_after_the_clicks_that_open_a_dialog():
     p = build_prompt(Action.CONNECT, URL, {"note": "Hi there"})
     assert "wait 2 seconds" in p and "now stale" in p
-    assert "Wait 1 second, look at the dialog again" in p
+    assert "wait 1 second, look at the dialog again" in p
+
+
+def test_connect_prompt_falls_back_to_a_bare_invite_when_the_note_will_not_land():
+    p = build_prompt(Action.CONNECT, URL, {"note": "Hi there"})
+    assert "STILL empty after the second try" in p
+    assert '"status": "sent_without_note"' in p and "Send without a note" in p
+    # without a note there is nothing to fall back from
+    assert "sent_without_note" not in build_prompt(Action.CONNECT, URL, {})
 
 
 def test_connect_prompt_recovers_a_note_linkedin_did_not_register():
@@ -162,7 +170,7 @@ def test_connect_prompt_recovers_a_note_linkedin_did_not_register():
     already re-types on an empty box, and the connect prompt now does the same plus a
     keystroke to wake the button."""
     p = build_prompt(Action.CONNECT, URL, {"note": "Hi there"})
-    assert "If the box is still empty, click into it" in p
+    assert "still reads 0, click into it" in p
     assert "grey or nothing happens" in p and "type one space, delete it" in p
     # steps stay contiguous whichever branch is taken
     for steps in (

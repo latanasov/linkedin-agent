@@ -237,7 +237,7 @@ the ramp and the per-person spacing are unaffected by any of this.
 | `follow` | | `followed`, `already_following`, `cannot_follow`, `profile_not_found` |
 | `like_post` | `pick: newest` or `different_from_liked` | `liked`, `already_liked`, `post_not_found`, `cannot_like`, `profile_not_found` |
 | `comment_post` | `pick`, `max_sentences` | `commented`, `already_commented`, `post_not_found`, `cannot_comment`, `profile_not_found` |
-| `connect` | `note_template` | `sent`, `already_pending`, `already_connected`, `cannot_connect`, `profile_not_found` |
+| `connect` | `note_template` | `sent`, `sent_without_note`, `already_pending`, `already_connected`, `cannot_connect`, `profile_not_found` |
 | `check_connection` | `repeat_every`, `until_days` | `connected`, `pending`, `not_connected`, `no_option`, `profile_not_found` |
 | `withdraw_invite` | | `withdrawn`, `not_pending`, `profile_not_found` |
 | `message` | `template` | `sent`, `not_connected`, `cannot_message`, `profile_not_found` |
@@ -249,6 +249,8 @@ the ramp and the per-person spacing are unaffected by any of this.
 1. If the step has `until_days` and the time is up, it goes to `on_result.timeout`.
 2. If `on_result` names the outcome, it goes there.
 3. `cannot_connect`, `cannot_message` and `profile_not_found` end the lead as `cannot_contact`.
+   `sent_without_note` is a connect whose note would not go into LinkedIn's box after two
+   tries; the bare invitation was sent instead. It counts as an invite and routes like `sent`.
    Every step that opens the profile can return `profile_not_found` (a profile can vanish
    between the visit and the follow). A missing profile is confirmed by a second look
    before it counts, and never trips the circuit breaker.

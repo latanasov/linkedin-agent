@@ -18,16 +18,22 @@ def build_prompt(profile_url: str, params: dict[str, Any]) -> str:
    of this dialog and some open the note box directly: whatever you see, get to a box you
    can type the note into, and do not click "Send without a note".
 5. Click inside the note box so it is focused, then type exactly (do not change it): {note}
-6. Check the note is now visible inside the box. If the box is still empty, click into it
-   and type the note once more.
-7. Wait 1 second, look at the dialog again, then click its "Send" button. If "Send" is
-   grey or nothing happens, LinkedIn has not registered the text: click at the end of the
-   note, type one space, delete it, and click "Send" again."""
+6. Look at the box and its character counter. If the box is still empty or the counter
+   still reads 0, click into it and type the note once more.
+7. If the note is in the box: wait 1 second, look at the dialog again, then click its
+   "Send" button. If "Send" is grey or nothing happens, click at the end of the note,
+   type one space, delete it, and click "Send" again.
+8. If the box is STILL empty after the second try, stop typing and send the invitation
+   without a note instead: if the dialog offers "Send without a note", click it;
+   otherwise close this dialog with Cancel or X, click "Connect" again and choose
+   "Send without a note". When the button shows "Pending", return
+   {{"status": "sent_without_note", "error": null}}."""
     else:
         note_steps = """4. If a dialog asks whether to add a note, choose "Send without a note".
 5. If a dialog asks "How do you know this person?", select "Other" and continue.
 6. Click "Send" if it has not been sent yet.
-7. (nothing more to do here)"""
+7. (nothing more to do here)
+8. (nothing more to do here)"""
     return f"""You are on LinkedIn, already logged in. Send one connection request.
 
 1. Navigate to: {profile_url}
@@ -45,9 +51,10 @@ def build_prompt(profile_url: str, params: dict[str, Any]) -> str:
    - None of these anywhere (for example a profile that only offers "Follow"):
      return {{"status": "cannot_connect", "error": null}}.
 {note_steps}
-8. If LinkedIn shows a message about reaching a limit, restrictions or unusual activity,
+9. If LinkedIn shows a message about reaching a limit, restrictions or unusual activity,
    return {{"status": "failed", "error": "restricted"}}.
-9. When the request is sent (button now shows "Pending"), return {{"status": "sent", "error": null}}.
+10. When the request is sent with the note (button now shows "Pending"), return
+    {{"status": "sent", "error": null}}.
 
 Rules:
 - Do NOT modify the note text. Do NOT click Follow or Message.

@@ -308,8 +308,8 @@ def test_like_result_with_bogus_post_url_marks_the_newest_post():
 def test_normalize_status_snaps_a_commented_status_to_the_known_one():
     r = normalize_status(Action.LIKE_POST, TaskResult(status="liked_but_url_not_found"))
     assert r.status == "liked" and r.data["reported_status"] == "liked_but_url_not_found"
-    r = normalize_status(Action.CONNECT, TaskResult(status="sent_without_note", data={"k": 1}))
-    assert r.status == "sent" and r.data == {"k": 1, "reported_status": "sent_without_note"}
+    r = normalize_status(Action.CONNECT, TaskResult(status="sent_with_note_typed", data={"k": 1}))
+    assert r.status == "sent" and r.data == {"k": 1, "reported_status": "sent_with_note_typed"}
     # the longest known prefix wins: already_liked, not liked
     r = normalize_status(Action.LIKE_POST, TaskResult(status="already_liked_earlier"))
     assert r.status == "already_liked"
@@ -350,3 +350,13 @@ def test_a_visit_that_read_the_page_is_ok_whatever_the_model_called_it():
     assert normalize_visit_with_data(Action.VISIT, empty) is empty
     other = TaskResult(status="failed", data=read)
     assert normalize_visit_with_data(Action.FOLLOW, other) is other
+
+
+def test_a_bare_invite_after_the_note_would_not_land_is_still_an_invite():
+    """Seen live three times: the note dialog opens, the text never lands, Send stays
+    grey. The fallback sends without a note; the lead is invited all the same."""
+    r = TaskResult(status="sent_without_note")
+    assert is_success(Action.CONNECT, r) and normalize_status(Action.CONNECT, r) is r
+    lead = make_lead(stage=LeadStage.WARMING)
+    out = apply_result(lead, Action.CONNECT, r, NOW)
+    assert out.stage == LeadStage.INVITED and out.invited_at == NOW and out.last_touch_at == NOW

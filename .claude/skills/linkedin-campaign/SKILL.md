@@ -184,7 +184,7 @@ If a like/comment step has no post to act on it is skipped even on the posts bra
 | `follow` | – | `followed`, `already_following`, `cannot_follow`, `profile_not_found` | next step |
 | `like_post` | `pick: newest \| different_from_liked` | `liked`, `already_liked`, `post_not_found`, `cannot_like`, `profile_not_found` | next step |
 | `comment_post` | `pick`, `max_sentences` (3) | `commented`, `already_commented`, `post_not_found`, `cannot_comment`, `profile_not_found` | next step |
-| `connect` | `note_template` (or blank) | `sent`, `already_pending`, `already_connected`, `cannot_connect`, `profile_not_found` | `cannot_connect`/`profile_not_found` → `end:cannot_contact`; others next step |
+| `connect` | `note_template` (or blank) | `sent`, `sent_without_note`, `already_pending`, `already_connected`, `cannot_connect`, `profile_not_found` | `cannot_connect`/`profile_not_found` → `end:cannot_contact`; others next step. `sent_without_note`: the note would not go into the box after two tries, the bare invite went instead |
 | `check_connection` | `repeat_every`, `until_days` | `connected`, `pending`, `not_connected`, `no_option`, `profile_not_found` | route explicitly; `no_option` stalls |
 | `withdraw_invite` | – | `withdrawn`, `not_pending`, `profile_not_found` | next step |
 | `message` | `template`, `allow_identical`, `skip_reply_check` | `sent`, `not_connected`, `cannot_message`, `profile_not_found` | `not_connected`/`cannot_message`/`profile_not_found` → `end:cannot_contact` |

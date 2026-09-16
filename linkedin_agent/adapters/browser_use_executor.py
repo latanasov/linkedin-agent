@@ -18,7 +18,7 @@ MAX_STEPS: dict[Action, int] = {
     Action.FOLLOW: 8,
     Action.LIKE_POST: 8,
     Action.COMMENT_POST: 12,
-    Action.CONNECT: 16,
+    Action.CONNECT: 20,
     Action.WITHDRAW_INVITE: 8,
     Action.MESSAGE: 16,
     Action.INMAIL: 16,

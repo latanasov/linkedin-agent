@@ -15,7 +15,9 @@ SUCCESS_STATUSES: dict[Action, frozenset[str]] = {
     Action.FOLLOW: frozenset({"followed", "already_following"}),
     Action.LIKE_POST: frozenset({"liked", "already_liked"}),
     Action.COMMENT_POST: frozenset({"commented", "already_commented"}),
-    Action.CONNECT: frozenset({"sent", "already_connected", "already_pending"}),
+    Action.CONNECT: frozenset(
+        {"sent", "sent_without_note", "already_connected", "already_pending"}
+    ),
     Action.CHECK_CONNECTION: frozenset({"connected", "pending", "not_connected"}),
     Action.WITHDRAW_INVITE: frozenset({"withdrawn", "not_pending"}),
     Action.MESSAGE: frozenset({"sent"}),
@@ -328,7 +330,7 @@ def apply_result(
     elif action == Action.COMMENT_POST and status in ("commented", "already_commented"):
         _mark_post(lead, clean_post_url(result.data.get("post_url")), commented=True)
     elif action == Action.CONNECT:
-        if status == "sent":
+        if status in ("sent", "sent_without_note"):
             lead.invited_at = lead.invited_at or now
             _advance_stage(lead, LeadStage.INVITED)
         elif status == "already_pending":

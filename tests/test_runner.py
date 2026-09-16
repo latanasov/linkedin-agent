@@ -1152,3 +1152,13 @@ async def test_a_visit_labelled_failed_but_fully_read_advances_the_lead(deps, ex
     lead2 = await deps.leads.get(lead.id)
     assert lead2.stage == LeadStage.WARMING and lead2.profile["headline"] == "Group CTO"
     assert (await deps.accounts.get("default")).consecutive_failures == 0
+
+
+async def test_a_bare_invite_routes_on_to_the_acceptance_check(deps, executor):
+    lead, _ = await seed(deps, step="invite.posts", branch="posts")
+    executor.script(Action.CONNECT, {"status": "sent_without_note"})
+    t = await enqueue_step(deps, lead, "invite.posts", note_template="connection_note")
+    out = await process_task(t, deps)
+    assert out.status == TaskStatus.DONE and out.result.status == "sent_without_note"
+    assert (await deps.leads.get(lead.id)).stage == LeadStage.INVITED
+    assert (await deps.leads.get_sequence(lead.id)).step_id == "wait.accept"
