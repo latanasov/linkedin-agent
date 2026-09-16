@@ -103,6 +103,8 @@ def test_visit_prompt_is_read_only():
     assert URL in p and "Do NOT click Connect" in p and "posted_days_ago" in p
     # a profile that is gone has a named outcome, so the model does not improvise one
     assert '"status": "profile_not_found"' in p
+    # a profile with no original posts is a read, not a failure
+    assert "only reposts and comments" in p and 'status is still "ok"' in p
 
 
 def test_every_profile_step_names_the_missing_profile_outcome():

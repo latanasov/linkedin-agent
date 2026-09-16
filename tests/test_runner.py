@@ -1132,3 +1132,23 @@ async def test_no_screenshot_on_a_crash_because_the_browser_is_gone(deps, execut
     t = await enqueue_step(deps, lead, "warm.visit")
     out = await process_task(t, deps)
     assert out.result.error_kind.value == "crash" and "screenshot" not in out.result.data
+
+
+async def test_a_visit_labelled_failed_but_fully_read_advances_the_lead(deps, executor):
+    lead, _ = await seed(deps, posts=[], profile={}, stage=LeadStage.NEW)
+    executor.script(
+        Action.VISIT,
+        {
+            "status": "failed",
+            "full_name": "Janet Doe",
+            "headline": "Group CTO",
+            "location": "Paris",
+            "posts": [],
+        },
+    )
+    t = await enqueue_step(deps, lead, "warm.visit")
+    out = await process_task(t, deps)
+    assert out.status == TaskStatus.DONE and out.result.status == "ok"
+    lead2 = await deps.leads.get(lead.id)
+    assert lead2.stage == LeadStage.WARMING and lead2.profile["headline"] == "Group CTO"
+    assert (await deps.accounts.get("default")).consecutive_failures == 0

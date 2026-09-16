@@ -108,6 +108,22 @@ def normalize_missing_profile(action: Action, result: TaskResult) -> TaskResult:
     return TaskResult(status="profile_not_found", data=data)
 
 
+# A visit that read the page is a visit that worked. The prompt returns one JSON shape and
+# models still label a complete read "failed" when the one thing they could not find is an
+# original post: seen live on a profile that only reposts, three times, a perfect read of
+# name, headline, title, company and location thrown away on the strength of one word.
+_VISIT_READ_FIELDS = ("full_name", "headline")
+
+
+def normalize_visit_with_data(action: Action, result: TaskResult) -> TaskResult:
+    if action != Action.VISIT or result.status not in ("failed", "error") or result.error:
+        return result
+    if not any(str(result.data.get(k) or "").strip() for k in _VISIT_READ_FIELDS):
+        return result
+    data = {**result.data, "reported_status": result.status}
+    return TaskResult(status="ok", data=data)
+
+
 def normalize_status(action: Action, result: TaskResult) -> TaskResult:
     """Make an invented status routable.
 

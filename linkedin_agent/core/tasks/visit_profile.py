@@ -27,7 +27,8 @@ def build_prompt(profile_url: str, params: dict[str, Any]) -> str:
    - url (the post link, if you can get it; otherwise "")
    - posted_days_ago (an integer: "2d" -> 2, "1w" -> 7, "3w" -> 21, "1mo" -> 30, "2yr" -> 730; if unknown use null)
    - text (first 300 characters of the post)
-   If the Activity section shows no posts, return an empty list.
+   If the Activity section shows no posts, or only reposts and comments, return an empty
+   list. That is a normal outcome and the status is still "ok": the profile was read.
 5. Do NOT click Connect, Follow, Message or any other button. Do NOT like anything.
 
 Return exactly this JSON shape:

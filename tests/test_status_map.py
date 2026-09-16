@@ -7,6 +7,7 @@ from linkedin_agent.core.status_map import (
     normalize_missing_profile,
     normalize_reply_check,
     normalize_status,
+    normalize_visit_with_data,
 )
 from linkedin_agent.models import Action, LeadStage, PostRef, TaskResult
 from tests.conftest import NOW, make_lead
@@ -333,3 +334,19 @@ def test_normalize_status_turns_gibberish_into_a_retryable_failure():
     assert r.data["reported_status"] == "done_i_think"
     # "likedd" is not "liked" followed by a separator
     assert normalize_status(Action.LIKE_POST, TaskResult(status="likedd")).status == "failed"
+
+
+def test_a_visit_that_read_the_page_is_ok_whatever_the_model_called_it():
+    """Seen live: a profile that only reposts came back with every field filled in and
+    status "failed", three times."""
+    read = {"full_name": "Janet Doe", "headline": "Group CTO", "posts": []}
+    r = normalize_visit_with_data(Action.VISIT, TaskResult(status="failed", data=read))
+    assert r.status == "ok" and r.data["full_name"] == "Janet Doe"
+    assert r.data["reported_status"] == "failed"
+    # a real failure carries an error, or no read at all: both are left alone
+    real = TaskResult(status="failed", error="max_steps_reached", data=read)
+    assert normalize_visit_with_data(Action.VISIT, real) is real
+    empty = TaskResult(status="failed", data={"posts": []})
+    assert normalize_visit_with_data(Action.VISIT, empty) is empty
+    other = TaskResult(status="failed", data=read)
+    assert normalize_visit_with_data(Action.FOLLOW, other) is other

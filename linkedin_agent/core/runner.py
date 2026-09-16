@@ -45,6 +45,7 @@ from .status_map import (
     normalize_missing_profile,
     normalize_reply_check,
     normalize_status,
+    normalize_visit_with_data,
 )
 from .tasks import build_prompt
 from .timezone import resolve_tz, schedule_in_window
@@ -339,6 +340,7 @@ async def process_task(task: Task, deps: Deps) -> Outcome:
     # left for classify_result; anything else is snapped to a known status or made a
     # retryable failure.
     result = normalize_missing_profile(task.action, result)
+    result = normalize_visit_with_data(task.action, result)
     if classify_result(result) is None:
         result = normalize_status(task.action, result)
 
