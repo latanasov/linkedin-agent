@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 from ..core.prompts import run_linkedin_agent
@@ -37,6 +38,22 @@ MAX_FAILURES: dict[Action, int] = {
 }
 
 
+# browser-use's own per-step timeout, applied when the settings leave it unset.
+DEFAULT_STEP_TIMEOUT_S = 120
+# The most a task may hold the browser on a hosted model. The run loop executes tasks one
+# at a time with no other bound, so a hang inside browser-use (seen live: a message task
+# "running" for two hours, the event bus deadlocked on a typing event) held the only
+# browser and every task behind it. A local model may legitimately need longer per step;
+# when the settings raise the step timeout the budget scales with it instead.
+WALL_CLOCK_CAP_S = 15 * 60
+
+
+def wall_clock_budget_s(max_steps: int, step_timeout_s: int | None) -> float:
+    if step_timeout_s is not None:
+        return max_steps * step_timeout_s + 60
+    return min(max_steps * DEFAULT_STEP_TIMEOUT_S, WALL_CLOCK_CAP_S)
+
+
 class BrowserUseExecutor:
     def __init__(
         self, llm: Any, *, llm_timeout_s: int | None = None, step_timeout_s: int | None = None
@@ -47,13 +64,26 @@ class BrowserUseExecutor:
 
     async def execute(self, task: Task, browser: Any) -> TaskResult:
         prompt = build_prompt(task.action, task.profile_url, task.params)
-        raw = await run_linkedin_agent(
-            prompt,
-            browser,
-            self._llm,
-            max_steps=MAX_STEPS.get(task.action, 10),
-            max_failures=MAX_FAILURES.get(task.action, 2),
-            llm_timeout_s=self._llm_timeout_s,
-            step_timeout_s=self._step_timeout_s,
-        )
+        max_steps = MAX_STEPS.get(task.action, 10)
+        budget = wall_clock_budget_s(max_steps, self._step_timeout_s)
+        try:
+            raw = await asyncio.wait_for(
+                run_linkedin_agent(
+                    prompt,
+                    browser,
+                    self._llm,
+                    max_steps=max_steps,
+                    max_failures=MAX_FAILURES.get(task.action, 2),
+                    llm_timeout_s=self._llm_timeout_s,
+                    step_timeout_s=self._step_timeout_s,
+                ),
+                timeout=budget,
+            )
+        except asyncio.TimeoutError:
+            # Classified as a crash by its name: the browser is presumed hung, the pool
+            # opens a fresh one, the attempt is given back and the breaker is untouched.
+            raise asyncio.TimeoutError(
+                f"{task.action.value} timed out after {budget:.0f}s wall-clock budget; "
+                "browser presumed hung"
+            ) from None
         return TaskResult.from_raw(raw)
