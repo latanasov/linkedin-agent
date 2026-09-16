@@ -1,4 +1,5 @@
 from datetime import timedelta
+from pathlib import Path
 
 import pytest
 
@@ -10,7 +11,7 @@ from linkedin_agent.core.runner import (
     run_loop,
 )
 from linkedin_agent.models import Action, GovernorState, LeadStage, Task, TaskResult, TaskStatus
-from tests.conftest import NOW, make_lead
+from tests.conftest import NOW, FakePool, make_lead
 
 
 async def seed(deps, lead=None, step="warm.visit", branch=None, **lead_overrides):
@@ -1066,3 +1067,68 @@ async def test_other_visit_failures_still_count_toward_the_breaker(deps, executo
     out = await process_task(t, deps)
     assert out.status == TaskStatus.QUEUED and "confirming" not in out.note
     assert (await deps.accounts.get("default")).consecutive_failures == 1
+
+
+# ── a failed task keeps a picture of the page it failed on ───────────────
+
+
+class _ShotBrowser:
+    async def take_screenshot(self) -> bytes:
+        return b"\x89PNG\r\n\x1a\nfake"
+
+
+class _ShotPool(FakePool):
+    async def get_browser(self, account):
+        return _ShotBrowser()
+
+
+async def test_a_failed_task_keeps_a_screenshot_of_the_page(deps, executor):
+    """Two profiles ate eleven connect attempts and every log line was the model's
+    one-phrase summary of a page nobody else saw."""
+    deps.pool = _ShotPool()
+    lead, _ = await seed(deps)
+    executor.script(Action.VISIT, {"status": "failed", "error": "element missing"})
+    t = await enqueue_step(deps, lead, "warm.visit")
+    out = await process_task(t, deps)
+    path = Path(out.result.data["screenshot"])
+    assert path.parent == deps.settings.home / "failures"
+    assert path.name.endswith(f"-visit-{t.id[:8]}.png")
+    assert path.read_bytes().startswith(b"\x89PNG")
+    assert f"screenshot {path}" in out.note
+    # the saved path travels with the task so `log` and the database can show it
+    assert (await deps.queue.get(t.id)).result["data"]["screenshot"] == str(path)
+
+
+async def test_a_browser_without_screenshots_fails_exactly_as_before(deps, executor):
+    lead, _ = await seed(deps)
+    executor.script(Action.VISIT, {"status": "failed", "error": "element missing"})
+    t = await enqueue_step(deps, lead, "warm.visit")
+    out = await process_task(t, deps)
+    assert "screenshot" not in out.result.data and "screenshot" not in out.note
+    assert not (deps.settings.home / "failures").exists()
+
+
+async def test_a_screenshot_that_fails_is_not_a_second_failure(deps, executor):
+    class Broken:
+        async def take_screenshot(self) -> bytes:
+            raise RuntimeError("target closed")
+
+    class BrokenPool(FakePool):
+        async def get_browser(self, account):
+            return Broken()
+
+    deps.pool = BrokenPool()
+    lead, _ = await seed(deps)
+    executor.script(Action.VISIT, {"status": "failed", "error": "element missing"})
+    t = await enqueue_step(deps, lead, "warm.visit")
+    out = await process_task(t, deps)
+    assert out.status == TaskStatus.QUEUED and "screenshot" not in out.result.data
+
+
+async def test_no_screenshot_on_a_crash_because_the_browser_is_gone(deps, executor):
+    deps.pool = _ShotPool()
+    lead, _ = await seed(deps)
+    executor.script(Action.VISIT, RuntimeError("Target closed"))
+    t = await enqueue_step(deps, lead, "warm.visit")
+    out = await process_task(t, deps)
+    assert out.result.error_kind.value == "crash" and "screenshot" not in out.result.data

@@ -172,6 +172,15 @@ The model could not find LinkedIn's Send button. It is retried; the retry checks
 thread first so nothing is sent twice. If it happens repeatedly, run once with
 `linkedin-agent -v run` and share the step log.
 
+## Failure screenshots
+
+Every task that fails with the browser still alive leaves a PNG of the page it failed on
+in `~/.linkedin-agent/failures/`, named by time, action and task id. The run log line and
+the task's stored result both carry the path. Look at it before changing a prompt: the
+model's error text is its summary of a page you have not seen, and the two have
+disagreed in practice. Crashes (browser gone) leave no picture. The folder is never
+cleaned automatically; delete old files when you are done with them.
+
 ## Campaigns and messages
 
 **`campaign check` says `unknown placeholder(s)`**

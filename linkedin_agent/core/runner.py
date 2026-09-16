@@ -327,20 +327,13 @@ async def process_task(task: Task, deps: Deps) -> Outcome:
     except Exception as e:
         kind = classify_error(e)
         logger.warning("Task %s raised %s: %s", task.id, kind, str(e)[:200])
+        errored = TaskResult(status="error", error=str(e)[:300])
         if kind == ErrorKind.CRASH:
             deps.pool.mark_browser_dead()
         else:
+            await _save_failure_screenshot(task, browser, deps, errored, now)
             await deps.pool.cleanup_pages()
-        return await _fail(
-            task,
-            deps,
-            acct,
-            lead,
-            campaign,
-            TaskResult(status="error", error=str(e)[:300]),
-            kind,
-            now,
-        )
+        return await _fail(task, deps, acct, lead, campaign, errored, kind, now)
 
     # A status the tables do not know must never route nowhere. Error-shaped results are
     # left for classify_result; anything else is snapped to a known status or made a
@@ -370,6 +363,7 @@ async def process_task(task: Task, deps: Deps) -> Outcome:
         if result_kind == ErrorKind.CRASH:
             deps.pool.mark_browser_dead()
         else:
+            await _save_failure_screenshot(task, browser, deps, result, now)
             await deps.pool.cleanup_pages()
         return await _fail(task, deps, acct, lead, campaign, result, result_kind, now)
 
@@ -588,6 +582,30 @@ async def _finish(task: Task, deps: Deps, status: TaskStatus, result: TaskResult
     return Outcome(status=status, result=result)
 
 
+async def _save_failure_screenshot(
+    task: Task, browser: Any, deps: Deps, result: TaskResult, now: datetime
+) -> None:
+    """Keep a picture of the page a task failed on, under <home>/failures/.
+
+    Two profiles ate eleven connect attempts in two days and every log line was the
+    model's one-phrase summary of a page nobody else saw. The screenshot is best effort:
+    a browser that cannot take one (dead, or a test fake) is not a second failure."""
+    shot = getattr(browser, "take_screenshot", None)
+    if shot is None:
+        return
+    try:
+        folder = deps.settings.home / "failures"
+        folder.mkdir(parents=True, exist_ok=True)
+        path = folder / f"{now:%Y%m%d-%H%M%S}-{task.action.value}-{task.id[:8]}.png"
+        data = await shot()
+        if not isinstance(data, bytes | bytearray) or not data:
+            return
+        path.write_bytes(data)
+        result.data = {**result.data, "screenshot": str(path)}
+    except Exception as e:  # never let the diagnostic become the failure
+        logger.debug("failure screenshot not saved: %s", str(e)[:120])
+
+
 async def _fail(
     task: Task,
     deps: Deps,
@@ -629,6 +647,8 @@ async def _fail(
                 f"after {MAX_CONSECUTIVE_FAILURES} failures"
             )
     # crash: infra, not LinkedIn — no breaker, no counter
+    if result.data.get("screenshot"):
+        note += f" · screenshot {result.data['screenshot']}"
     await deps.accounts.save(acct)
     await deps.log.record(task.account, task.action, task.lead_id, False, result.status, now)
 

@@ -33,6 +33,10 @@ def test_browser_session_surface():
     params = inspect.signature(BrowserSession.__init__).parameters
     for kw in ("user_data_dir", "headless", "keep_alive", "executable_path", "args", "proxy"):
         assert kw in params, kw
+    # failure screenshots: called with no arguments, bytes back
+    assert callable(BrowserSession.take_screenshot)
+    shot = inspect.signature(BrowserSession.take_screenshot).parameters
+    assert all(p.default is not inspect.Parameter.empty for n, p in shot.items() if n != "self")
 
 
 def test_agent_and_llm_surface():
