@@ -128,6 +128,49 @@ def test_connect_prompt_offers_every_routed_status():
     assert "Withdraw" in p and '"1st"' in p
 
 
+def test_connect_prompt_does_not_tie_the_note_path_to_one_dialog():
+    """Naming one dialog exactly ("Add a note to your invitation?") broke six invites in
+    a row: LinkedIn shows variants, and the model hunted for wording that was not there
+    instead of typing in the box in front of it."""
+    p = build_prompt(Action.CONNECT, URL, {"note": "Hi there"})
+    assert "Add a note to your invitation?" not in p
+    assert "several variants" in p and 'do not click "Send without a note"' in p
+
+
+def test_connect_has_room_for_the_longest_flow_we_have():
+    from linkedin_agent.adapters.browser_use_executor import MAX_FAILURES, MAX_STEPS
+
+    assert MAX_STEPS[Action.CONNECT] >= 16
+    # Two profiles in one afternoon died two actions after the note dialog opened: one
+    # stale index, one re-read, and browser-use's default of 2 consecutive errors was
+    # spent. The dialog-opening actions get room for that re-read.
+    for action in (Action.CONNECT, Action.MESSAGE, Action.INMAIL):
+        assert MAX_FAILURES[action] >= 4, action
+
+
+def test_connect_prompt_pauses_after_the_clicks_that_open_a_dialog():
+    p = build_prompt(Action.CONNECT, URL, {"note": "Hi there"})
+    assert "wait 2 seconds" in p and "now stale" in p
+    assert "Wait 1 second, look at the dialog again" in p
+
+
+def test_connect_prompt_recovers_a_note_linkedin_did_not_register():
+    """Seen live: a profile whose Send button stayed grey three times while the same note
+    sent fine by hand. The text goes in without LinkedIn's input event; the message prompt
+    already re-types on an empty box, and the connect prompt now does the same plus a
+    keystroke to wake the button."""
+    p = build_prompt(Action.CONNECT, URL, {"note": "Hi there"})
+    assert "If the box is still empty, click into it" in p
+    assert "grey or nothing happens" in p and "type one space, delete it" in p
+    # steps stay contiguous whichever branch is taken
+    for steps in (
+        build_prompt(Action.CONNECT, URL, {"note": "x"}),
+        build_prompt(Action.CONNECT, URL, {}),
+    ):
+        nums = [int(line.split(".")[0]) for line in steps.splitlines() if line[:1].isdigit()]
+        assert nums == list(range(1, len(nums) + 1)), nums
+
+
 def test_connect_prompt_with_and_without_note():
     with_note = build_prompt(Action.CONNECT, URL, {"note": "Enjoyed your post."})
     assert "Add a note" in with_note and "Enjoyed your post." in with_note
