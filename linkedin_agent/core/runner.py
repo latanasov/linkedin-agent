@@ -36,8 +36,10 @@ from ..ports import (
 )
 from . import messages as msg
 from . import sequence as seqeng
+from .browser_pool import kill_stray_chrome
 from .errors import classify_error, classify_result
 from .limits import account_age_days, effective_cap, remaining
+from .prompts import with_deadline
 from .status_map import (
     MISSING_PROFILE_ACTIONS,
     apply_result,
@@ -53,6 +55,10 @@ from .timezone import resolve_tz, schedule_in_window
 logger = logging.getLogger(__name__)
 
 BREAKER_HOURS = 48
+# Starting Chrome and getting a usable tab: unbounded until a hung browser blocked the
+# loop for hours with no task even claimed. The executor's own budget starts after this.
+BROWSER_START_TIMEOUT_S = 180
+BROWSER_CLEANUP_TIMEOUT_S = 60
 MAX_CONSECUTIVE_FAILURES = 3
 MAX_ATTEMPTS = 3
 # Infrastructure failures (browser gone, laptop slept mid-task) do not consume a task's
@@ -302,7 +308,9 @@ async def process_task(task: Task, deps: Deps) -> Outcome:
 
     # 6. browser
     try:
-        browser = await deps.pool.get_browser(account)
+        browser = await with_deadline(
+            deps.pool.get_browser(account), BROWSER_START_TIMEOUT_S, "browser start"
+        )
     except Exception as e:
         deps.pool.mark_browser_dead()
         logger.exception("Browser start failed")
@@ -333,7 +341,7 @@ async def process_task(task: Task, deps: Deps) -> Outcome:
             await _drop_browser(deps)
         else:
             await _save_failure_screenshot(task, browser, deps, errored, now)
-            await deps.pool.cleanup_pages()
+            await _cleanup_pages(deps)
         return await _fail(task, deps, acct, lead, campaign, errored, kind, now)
 
     # A status the tables do not know must never route nowhere. Error-shaped results are
@@ -366,7 +374,7 @@ async def process_task(task: Task, deps: Deps) -> Outcome:
             await _drop_browser(deps)
         else:
             await _save_failure_screenshot(task, browser, deps, result, now)
-            await deps.pool.cleanup_pages()
+            await _cleanup_pages(deps)
         return await _fail(task, deps, acct, lead, campaign, result, result_kind, now)
 
     # 8. success path
@@ -390,7 +398,7 @@ async def process_task(task: Task, deps: Deps) -> Outcome:
         if campaign and task.step_id:
             await _advance_sequence(lead, campaign, task, result, deps, now)
 
-    await deps.pool.cleanup_pages()
+    await _cleanup_pages(deps)
     return await _finish(task, deps, TaskStatus.DONE, result)
 
 
@@ -584,6 +592,15 @@ async def _finish(task: Task, deps: Deps, status: TaskStatus, result: TaskResult
     return Outcome(status=status, result=result)
 
 
+async def _cleanup_pages(deps: Deps) -> None:
+    """Closing a task's tabs goes through the same event bus that hangs; bound it."""
+    try:
+        await with_deadline(deps.pool.cleanup_pages(), BROWSER_CLEANUP_TIMEOUT_S, "tab cleanup")
+    except Exception as e:
+        logger.warning("Tab cleanup failed: %s", str(e)[:120])
+        deps.pool.mark_browser_dead()
+
+
 async def _drop_browser(deps: Deps) -> None:
     """End a crashed browser for good: flag it and close it.
 
@@ -592,9 +609,14 @@ async def _drop_browser(deps: Deps) -> None:
     unwind. Best effort, because the close can hang for the same reason the task did."""
     deps.pool.mark_browser_dead()
     try:
-        await asyncio.wait_for(deps.pool.shutdown(), timeout=45)
+        await with_deadline(deps.pool.shutdown(), 45, "browser shutdown")
     except Exception as e:
         logger.warning("Could not close the crashed browser: %s", str(e)[:120])
+    # A browser that would not close politely is still holding the profile, and the next
+    # task would find it there. Kill what is left of it.
+    killed = kill_stray_chrome(deps.settings)
+    if killed:
+        logger.warning("Killed %d stray Chrome process(es) after a hung browser", killed)
 
 
 async def _save_failure_screenshot(

@@ -172,6 +172,18 @@ The model could not find LinkedIn's Send button. It is retried; the retry checks
 thread first so nothing is sent twice. If it happens repeatedly, run once with
 `linkedin-agent -v run` and share the step log.
 
+## The browser wedges and nothing runs
+
+browser-use's event bus can deadlock (its own logs say "has been running for >15s on
+event … possible slow processing or deadlock"). Every await around it is bounded now:
+starting the browser, the tab cleanup after a task, and the task itself (two minutes a
+step, fifteen minutes at most). A bound that expires is a crash, so the attempt is given
+back, the browser is closed and any Chrome still holding the profile is killed.
+
+If the agent still looks stopped, check the queue for a task stuck in `running` and the
+log for the bubus warnings above. Clearing it by hand is `pkill -f chrome` followed by
+`systemctl restart linkedin-agent`; nothing is lost, the task is retried.
+
 ## Failure screenshots
 
 Every task that fails with the browser still alive leaves a PNG of the page it failed on

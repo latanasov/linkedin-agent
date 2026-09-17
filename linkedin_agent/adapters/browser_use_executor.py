@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-import asyncio
 from typing import Any
 
-from ..core.prompts import run_linkedin_agent
+from ..core.prompts import run_linkedin_agent, with_deadline
 from ..core.tasks import build_prompt
 from ..models import Action, Task, TaskResult
 
@@ -66,7 +65,7 @@ class BrowserUseExecutor:
         prompt = build_prompt(task.action, task.profile_url, task.params)
         max_steps = MAX_STEPS.get(task.action, 10)
         budget = wall_clock_budget_s(max_steps, self._step_timeout_s)
-        run = asyncio.ensure_future(
+        raw = await with_deadline(
             run_linkedin_agent(
                 prompt,
                 browser,
@@ -75,18 +74,8 @@ class BrowserUseExecutor:
                 max_failures=MAX_FAILURES.get(task.action, 2),
                 llm_timeout_s=self._llm_timeout_s,
                 step_timeout_s=self._step_timeout_s,
-            )
+            ),
+            budget,
+            f"{task.action.value} (browser presumed hung)",
         )
-        # asyncio.wait, not wait_for: wait_for cancels and then AWAITS the unwinding, and
-        # browser-use's event bus swallows the cancellation, so the timeout hung with it
-        # (seen live: a message task "running" for 194 minutes on the fix meant to stop
-        # exactly that). Here the deadline is ours alone: cancel, do not await the orphan,
-        # and let the runner kill the browser, which is what finally ends it.
-        done, _ = await asyncio.wait({run}, timeout=budget)
-        if not done:
-            run.cancel()
-            raise asyncio.TimeoutError(
-                f"{task.action.value} timed out after {budget:.0f}s wall-clock budget; "
-                "browser presumed hung"
-            )
-        return TaskResult.from_raw(run.result())
+        return TaskResult.from_raw(raw)

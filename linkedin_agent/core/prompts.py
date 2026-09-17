@@ -6,6 +6,7 @@ package is importable without it.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 import unicodedata
@@ -43,6 +44,21 @@ MISSING_PROFILE_RULE = (
     '"profile not available") or sends you to a search page or the home feed instead of the '
     'profile, return {"status": "profile_not_found", "error": null} and nothing else.'
 )
+
+
+async def with_deadline(coro: Any, seconds: float, what: str) -> Any:
+    """Await `coro`, but give up after `seconds` whatever it does about it.
+
+    asyncio.wait_for cancels and then AWAITS the unwinding, and browser-use's event bus
+    swallows cancellation, so wait_for hangs with the work it was meant to bound. Here the
+    deadline is ours: cancel, do not await the orphan, raise. Seen live twice, a task
+    "running" for 194 minutes and a browser start that never returned."""
+    task = asyncio.ensure_future(coro)
+    done, _ = await asyncio.wait({task}, timeout=seconds)
+    if not done:
+        task.cancel()
+        raise asyncio.TimeoutError(f"{what} timed out after {seconds:.0f}s")
+    return task.result()
 
 
 def validate_linkedin_url(url: str) -> str:

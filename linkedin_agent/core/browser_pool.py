@@ -17,6 +17,8 @@ import time
 from pathlib import Path
 from typing import Any
 
+import psutil
+
 from ..config import Settings
 
 logger = logging.getLogger(__name__)
@@ -326,6 +328,29 @@ class BrowserPool:
             return float(psutil.Process().memory_percent())
         except Exception:
             return 0.0
+
+
+def kill_stray_chrome(settings: Settings) -> int:
+    """Kill Chrome processes still holding this agent's profile directory.
+
+    browser-use's own kill goes through the event bus, which is exactly what hangs when a
+    browser wedges: seen live, ten Chrome processes alive twenty minutes after the task
+    that owned them was abandoned, and the next task inheriting the mess. Matching on the
+    profile path keeps a user's own Chrome out of it."""
+    needle = str(settings.profiles_dir)
+    killed = 0
+    for proc in psutil.process_iter(["pid", "name", "cmdline"]):
+        try:
+            name = (proc.info.get("name") or "").lower()
+            if "chrom" not in name:
+                continue
+            if not any(needle in part for part in (proc.info.get("cmdline") or [])):
+                continue
+            proc.kill()
+            killed += 1
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            continue
+    return killed
 
 
 async def ensure_tab(browser: Any) -> bool:

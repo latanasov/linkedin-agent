@@ -1,3 +1,4 @@
+import asyncio
 from datetime import timedelta
 from pathlib import Path
 
@@ -1173,3 +1174,39 @@ async def test_a_crash_closes_the_browser_instead_of_only_flagging_it(deps, exec
     out = await process_task(t, deps)
     assert out.result.error_kind.value == "crash"
     assert deps.pool.dead and deps.pool.shutdowns == 1
+
+
+async def test_a_browser_that_never_starts_is_a_crash_not_a_hang(deps, executor, monkeypatch):
+    """Seen live: browser start and its first tab request are what wedged, before any
+    task ran, so the executor's own budget never got a turn and the loop sat for hours."""
+    import linkedin_agent.core.runner as rn
+
+    class NeverStarts(FakePool):
+        async def get_browser(self, account):
+            await asyncio.sleep(3600)
+
+    monkeypatch.setattr(rn, "BROWSER_START_TIMEOUT_S", 0.05)
+    deps.pool = NeverStarts()
+    lead, _ = await seed(deps)
+    t = await enqueue_step(deps, lead, "warm.visit")
+    out = await process_task(t, deps)
+    assert out.result.error_kind.value == "crash"
+    assert "timed out" in (out.result.error or "")
+    assert out.status == TaskStatus.QUEUED  # the attempt is given back
+
+
+async def test_tab_cleanup_that_hangs_does_not_hold_the_loop(deps, executor, monkeypatch):
+    import linkedin_agent.core.runner as rn
+
+    class SlowCleanup(FakePool):
+        async def cleanup_pages(self):
+            await asyncio.sleep(3600)
+
+    monkeypatch.setattr(rn, "BROWSER_CLEANUP_TIMEOUT_S", 0.05)
+    deps.pool = SlowCleanup()
+    lead, _ = await seed(deps, posts=[], profile={}, stage=LeadStage.NEW)
+    executor.script(Action.VISIT, {"status": "ok", "full_name": "Jane Doe", "posts": []})
+    t = await enqueue_step(deps, lead, "warm.visit")
+    out = await process_task(t, deps)
+    assert out.status == TaskStatus.DONE  # the task still counts; the browser is retired
+    assert deps.pool.dead

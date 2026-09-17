@@ -1,6 +1,7 @@
 """Pure helpers of the browser layer: executable resolution and the plain-Chrome launcher."""
 
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -212,3 +213,34 @@ async def test_verify_session_uses_feed_redirect(tmp_path: Path, monkeypatch):
     await pool.get_browser("default")
     assert await pool.verify_session("default") is True
     assert await pool.verify_session("other") is None
+
+
+def test_kill_stray_chrome_only_touches_this_agents_profile(tmp_path, monkeypatch):
+    """A hung browser leaves Chrome processes holding the profile; browser-use's own kill
+    goes through the event bus that hung in the first place. Matching on the profile path
+    keeps the user's own Chrome out of it."""
+    from linkedin_agent.core import browser_pool as bp
+
+    settings = Settings(home=tmp_path / "home")
+    profile = str(settings.profiles_dir)
+    killed: list[int] = []
+
+    class FakeProc:
+        def __init__(self, pid, name, cmdline):
+            self.info = {"pid": pid, "name": name, "cmdline": cmdline}
+
+        def kill(self):
+            killed.append(self.info["pid"])
+
+    procs = [
+        FakeProc(1, "chrome", [f"--user-data-dir={profile}/default"]),
+        FakeProc(2, "chrome_crashpad_handler", [f"--database={profile}/default/Crashpad"]),
+        FakeProc(3, "chrome", ["--user-data-dir=/home/someone/.config/google-chrome"]),
+        FakeProc(4, "python3", [f"--nothing-to-do-with={profile}"]),
+    ]
+    fake = SimpleNamespace(
+        process_iter=lambda fields: procs, NoSuchProcess=Exception, AccessDenied=Exception
+    )
+    monkeypatch.setattr(bp, "psutil", fake)
+    assert bp.kill_stray_chrome(settings) == 2
+    assert killed == [1, 2]  # the agent's own, not the user's Chrome, not a python process
