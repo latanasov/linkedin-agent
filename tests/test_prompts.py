@@ -403,3 +403,12 @@ def test_connect_believes_only_the_degree_badge_for_already_connected():
     Message button and the model called it connected. Checked by hand, both said Connect."""
     p = build_prompt(Action.CONNECT, URL, {"note": "hi"})
     assert 'A "Message" button is NOT' in p and 'Only the "1st" badge counts' in p
+
+
+def test_withdraw_looks_in_the_more_menu_before_giving_up():
+    """Seen live: a connection check said "pending" and the withdraw five minutes later
+    said "not_pending", because it read only the header while LinkedIn had put Pending in
+    the More menu. That verdict sends an InMail to someone whose invite is still open."""
+    p = build_prompt(Action.WITHDRAW_INVITE, URL, {})
+    assert '"More" menu' in p and "neither the header nor" in p
+    assert "never answer it" in p
