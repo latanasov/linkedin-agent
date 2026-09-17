@@ -1162,3 +1162,14 @@ async def test_a_bare_invite_routes_on_to_the_acceptance_check(deps, executor):
     assert out.status == TaskStatus.DONE and out.result.status == "sent_without_note"
     assert (await deps.leads.get(lead.id)).stage == LeadStage.INVITED
     assert (await deps.leads.get_sequence(lead.id)).step_id == "wait.accept"
+
+
+async def test_a_crash_closes_the_browser_instead_of_only_flagging_it(deps, executor):
+    """A timed-out task is still inside the browser holding the profile; flagging it dead
+    only means the next task opens another. Killing it is what makes the orphan unwind."""
+    lead, _ = await seed(deps)
+    executor.script(Action.VISIT, RuntimeError("Target closed"))
+    t = await enqueue_step(deps, lead, "warm.visit")
+    out = await process_task(t, deps)
+    assert out.result.error_kind.value == "crash"
+    assert deps.pool.dead and deps.pool.shutdowns == 1

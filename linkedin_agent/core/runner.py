@@ -330,7 +330,7 @@ async def process_task(task: Task, deps: Deps) -> Outcome:
         logger.warning("Task %s raised %s: %s", task.id, kind, str(e)[:200])
         errored = TaskResult(status="error", error=str(e)[:300])
         if kind == ErrorKind.CRASH:
-            deps.pool.mark_browser_dead()
+            await _drop_browser(deps)
         else:
             await _save_failure_screenshot(task, browser, deps, errored, now)
             await deps.pool.cleanup_pages()
@@ -363,7 +363,7 @@ async def process_task(task: Task, deps: Deps) -> Outcome:
             result_kind = ErrorKind.CRASH
     if result_kind is not None:
         if result_kind == ErrorKind.CRASH:
-            deps.pool.mark_browser_dead()
+            await _drop_browser(deps)
         else:
             await _save_failure_screenshot(task, browser, deps, result, now)
             await deps.pool.cleanup_pages()
@@ -582,6 +582,19 @@ async def _finish(task: Task, deps: Deps, status: TaskStatus, result: TaskResult
     task.result = result.model_dump(mode="json") if result else None
     await deps.queue.finish(task.id, result, status)
     return Outcome(status=status, result=result)
+
+
+async def _drop_browser(deps: Deps) -> None:
+    """End a crashed browser for good: flag it and close it.
+
+    Flagging alone only means the next task opens a new one. A task that timed out is
+    still in there, mid-action, holding the profile; killing the browser is what makes it
+    unwind. Best effort, because the close can hang for the same reason the task did."""
+    deps.pool.mark_browser_dead()
+    try:
+        await asyncio.wait_for(deps.pool.shutdown(), timeout=45)
+    except Exception as e:
+        logger.warning("Could not close the crashed browser: %s", str(e)[:120])
 
 
 async def _save_failure_screenshot(

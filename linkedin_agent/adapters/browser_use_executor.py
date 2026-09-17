@@ -66,24 +66,27 @@ class BrowserUseExecutor:
         prompt = build_prompt(task.action, task.profile_url, task.params)
         max_steps = MAX_STEPS.get(task.action, 10)
         budget = wall_clock_budget_s(max_steps, self._step_timeout_s)
-        try:
-            raw = await asyncio.wait_for(
-                run_linkedin_agent(
-                    prompt,
-                    browser,
-                    self._llm,
-                    max_steps=max_steps,
-                    max_failures=MAX_FAILURES.get(task.action, 2),
-                    llm_timeout_s=self._llm_timeout_s,
-                    step_timeout_s=self._step_timeout_s,
-                ),
-                timeout=budget,
+        run = asyncio.ensure_future(
+            run_linkedin_agent(
+                prompt,
+                browser,
+                self._llm,
+                max_steps=max_steps,
+                max_failures=MAX_FAILURES.get(task.action, 2),
+                llm_timeout_s=self._llm_timeout_s,
+                step_timeout_s=self._step_timeout_s,
             )
-        except asyncio.TimeoutError:
-            # Classified as a crash by its name: the browser is presumed hung, the pool
-            # opens a fresh one, the attempt is given back and the breaker is untouched.
+        )
+        # asyncio.wait, not wait_for: wait_for cancels and then AWAITS the unwinding, and
+        # browser-use's event bus swallows the cancellation, so the timeout hung with it
+        # (seen live: a message task "running" for 194 minutes on the fix meant to stop
+        # exactly that). Here the deadline is ours alone: cancel, do not await the orphan,
+        # and let the runner kill the browser, which is what finally ends it.
+        done, _ = await asyncio.wait({run}, timeout=budget)
+        if not done:
+            run.cancel()
             raise asyncio.TimeoutError(
                 f"{task.action.value} timed out after {budget:.0f}s wall-clock budget; "
                 "browser presumed hung"
-            ) from None
-        return TaskResult.from_raw(raw)
+            )
+        return TaskResult.from_raw(run.result())
