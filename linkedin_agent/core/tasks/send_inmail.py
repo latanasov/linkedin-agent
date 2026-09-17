@@ -39,6 +39,9 @@ def build_prompt(profile_url: str, params: dict[str, Any]) -> str:
 9. Click "Send" and return {{"status": "sent", "error": null, "prior_reply_text": "<from step 4>"}}.
 
 Rules:
+- Work only on this profile page. Never open the Messaging page, never start a new message
+  from the compose icon, and never search for the person by name: many people share a name
+  and the message would go to a stranger.
 - If no Message/InMail button exists or InMail credits are exhausted, return
   {{"status": "cannot_message", "error": null}}.
 - Never press Enter to send; only the Send button sends.

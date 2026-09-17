@@ -375,3 +375,24 @@ def test_unfinished_run_with_a_timeout_classifies_as_a_crash():
 
     r = TaskResult.from_raw(unfinished_run(History(), 12))
     assert classify_result(r) is ErrorKind.CRASH, "a slow browser is not the lead's fault"
+
+
+def test_connection_check_believes_only_the_degree_badge():
+    """Seen live: a pending invite reported "connected", which started a message sequence
+    to someone who could not receive it and burned five attempts. The profile showed a
+    Message button (Sales Navigator does that) and the badge read 3rd+."""
+    p = build_prompt(Action.CHECK_CONNECTION, URL, {})
+    assert 'Never\n   answer "connected" without having seen the "1st" badge' in p
+    assert "does NOT mean connected" in p
+
+
+def test_message_and_inmail_stay_on_the_profile():
+    """The model gave up on the profile, opened the Messaging page and searched the name;
+    the results held eleven people called the same thing."""
+    for action, params in (
+        (Action.MESSAGE, {"text": "hi"}),
+        (Action.INMAIL, {"subject": "s", "text": "hi"}),
+    ):
+        p = build_prompt(action, URL, params)
+        assert "Never open the Messaging page" in p, action
+        assert "never search for the person by name" in p, action

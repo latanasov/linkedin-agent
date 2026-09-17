@@ -22,7 +22,8 @@ def build_prompt(profile_url: str, params: dict[str, Any]) -> str:
 1. Navigate to: {profile_url}
 2. If the page shows a login form or checkpoint, return {{"status": "failed", "error": "login_required"}}.
    {MISSING_PROFILE_RULE}
-3. If the header shows "Pending" or "Connect" instead of "Message", you are not connected:
+3. Check the degree badge next to the person's name. If it is not "1st", or the header
+   shows "Pending" or "Connect" instead of "Message", you are not connected:
    return {{"status": "not_connected", "error": null}}.
 4. Click the "Message" button in the profile header. A conversation panel opens, usually
    as an overlay at the bottom-right of the page. If it is collapsed to a small header
@@ -45,6 +46,10 @@ def build_prompt(profile_url: str, params: dict[str, Any]) -> str:
     {{"status": "sent", "error": null, "prior_reply_text": "<from step 5>"}}.
 
 Rules:
+- Work only on this profile page. Never open the Messaging page, never start a new message
+  from the compose icon, and never search for the person by name: many people share a name
+  and the message would go to a stranger. If the profile's own Message button will not
+  open a conversation, return {{"status": "cannot_message", "error": null}}.
 - If no Message button exists or the compose field never appears, return
   {{"status": "cannot_message", "error": null}}.
 - Never press Enter to send: the message has line breaks and Enter may send a partial
