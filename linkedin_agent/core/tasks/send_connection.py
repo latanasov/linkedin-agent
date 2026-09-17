@@ -39,11 +39,14 @@ def build_prompt(profile_url: str, params: dict[str, Any]) -> str:
 1. Navigate to: {profile_url}
 2. If the page shows a login form or checkpoint, return {{"status": "failed", "error": "login_required"}}.
    {MISSING_PROFILE_RULE}
-3. Look at the buttons in the profile header AND open the "More" menu to see what it holds:
+3. Read the degree badge next to the person's name ("1st", "2nd", "3rd", "3rd+"), then the
+   buttons in the profile header, then open the "More" menu to see what it holds:
+   - The badge says "1st": you are already connected.
+     Return {{"status": "already_connected", "error": null}}. A "Message" button is NOT
+     evidence of this: LinkedIn shows one on open profiles and to Sales Navigator, and a
+     pending invitation often shows one too. Only the "1st" badge counts.
    - A "Pending" button in the header, or "Pending" / "Withdraw" inside "More": a request is
      already out. Return {{"status": "already_pending", "error": null}}.
-   - A "1st" degree badge next to the name, or "Message" with no "Connect" and no "Pending"
-     anywhere: you are already connected. Return {{"status": "already_connected", "error": null}}.
    - "Connect" in the header or inside "More": click it, then wait 2 seconds. A dialog
      animates in and every element index you read before the click is now stale: look at
      the page again before your next action. A "Message" or "Follow" button next to

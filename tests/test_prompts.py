@@ -396,3 +396,10 @@ def test_message_and_inmail_stay_on_the_profile():
         p = build_prompt(action, URL, params)
         assert "Never open the Messaging page" in p, action
         assert "never search for the person by name" in p, action
+
+
+def test_connect_believes_only_the_degree_badge_for_already_connected():
+    """Two leads were recorded as connected and never invited at all: the profile showed a
+    Message button and the model called it connected. Checked by hand, both said Connect."""
+    p = build_prompt(Action.CONNECT, URL, {"note": "hi"})
+    assert 'A "Message" button is NOT' in p and 'Only the "1st" badge counts' in p
