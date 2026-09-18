@@ -59,6 +59,13 @@ BREAKER_HOURS = 48
 # loop for hours with no task even claimed. The executor's own budget starts after this.
 BROWSER_START_TIMEOUT_S = 180
 BROWSER_CLEANUP_TIMEOUT_S = 60
+# The backstop. Every await below has its own bound, but a new unbounded one keeps
+# surfacing: first the executor, then browser start, then the reply check's own browser
+# start, each found only after a task had held the single browser for hours. The loop
+# runs tasks one at a time, so one hang starves the whole queue. A task legitimately
+# reaching even half of this has already spent several inner deadlines; killing it is
+# right. Whatever hangs next, the queue moves on.
+TASK_WALL_CLOCK_S = 45 * 60
 MAX_CONSECUTIVE_FAILURES = 3
 MAX_ATTEMPTS = 3
 # Infrastructure failures (browser gone, laptop slept mid-task) do not consume a task's
@@ -508,7 +515,9 @@ async def _check_replied_first(
         params={"last_message_snippet": (lead.last_message_text or "")[:80]},
     )
     try:
-        browser = await deps.pool.get_browser(task.account)
+        browser = await with_deadline(
+            deps.pool.get_browser(task.account), BROWSER_START_TIMEOUT_S, "browser start"
+        )
         result = await deps.executor.execute(probe, browser)
     except Exception as e:
         logger.warning("Pre-send reply check failed, sending anyway: %s", str(e)[:120])
@@ -617,6 +626,19 @@ async def _drop_browser(deps: Deps) -> None:
     killed = kill_stray_chrome(deps.settings)
     if killed:
         logger.warning("Killed %d stray Chrome process(es) after a hung browser", killed)
+
+
+async def _abandon_stuck(task: Task, deps: Deps, why: str) -> Outcome:
+    """Fail a task that outlived every deadline inside `process_task`, and free the queue.
+
+    Reaching here is always a bug: some await had no bound. The task is failed rather
+    than requeued in place, the browser is killed so the next task starts clean, and the
+    scheduler materialises the step again on its next tick. The `stuck` status is what to
+    grep for in the action log when this happens."""
+    logger.error("Abandoned %s task %s after %s", task.action.value, task.id, why)
+    await _drop_browser(deps)
+    await deps.log.record(task.account, task.action, task.lead_id, False, "stuck", deps.clock())
+    return await _finish(task, deps, TaskStatus.FAILED, TaskResult(status="stuck"))
 
 
 async def _save_failure_screenshot(
@@ -884,7 +906,10 @@ async def run_loop(
                 await deps.pool.maybe_close_idle(deps.settings.idle_browser_timeout_s)
                 await nap(min(25, tick_interval(deps)))
                 continue
-            outcome = await process_task(task, deps)
+            try:
+                outcome = await with_deadline(process_task(task, deps), TASK_WALL_CLOCK_S, "task")
+            except asyncio.TimeoutError as e:
+                outcome = await _abandon_stuck(task, deps, str(e))
             processed += 1
             loop_errors = 0
             emit(_format(task, outcome))

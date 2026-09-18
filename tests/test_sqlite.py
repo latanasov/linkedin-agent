@@ -105,9 +105,9 @@ async def test_queue_expire_and_requeue_stale(db):
     await q.enqueue(fine)
     assert await q.expire_overdue(NOW) == 1
     assert (await q.get(overdue.id)).status == TaskStatus.SKIPPED
-    running = await q.claim_next("default", NOW - timedelta(hours=2))
+    running = await q.claim_next("default", NOW - timedelta(minutes=40))
     assert running.id == fine.id
-    # claimed by this very process, which is alive: left alone however old it is
+    # claimed by this very process, which is alive: left alone past the plain age rule
     assert await q.requeue_stale_running(NOW, older_than_s=1800) == 0
     assert (await q.get(fine.id)).status == TaskStatus.RUNNING
     # the claiming process is gone: requeued at once, whatever its age

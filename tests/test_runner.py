@@ -1210,3 +1210,50 @@ async def test_tab_cleanup_that_hangs_does_not_hold_the_loop(deps, executor, mon
     out = await process_task(t, deps)
     assert out.status == TaskStatus.DONE  # the task still counts; the browser is retired
     assert deps.pool.dead
+
+
+async def test_pre_send_reply_check_browser_start_cannot_hang(deps, executor, monkeypatch):
+    """Seen live: a message task sat 'running' for eleven hours with nothing in the log.
+
+    The reply check before a send asks the pool for a browser itself, and that call was
+    the one `get_browser` left unbounded when the others were capped."""
+    import linkedin_agent.core.runner as rn
+
+    class NeverStarts(FakePool):
+        async def get_browser(self, account):
+            await asyncio.sleep(3600)
+
+    monkeypatch.setattr(rn, "BROWSER_START_TIMEOUT_S", 0.05)
+    deps.pool = NeverStarts()
+    lead, _ = await seed(
+        deps,
+        step="post.m2",
+        branch="posts",
+        last_message_at=NOW - timedelta(days=3),
+        last_message_text="Hi Jane, thanks for connecting.",
+    )
+    t = await enqueue_step(deps, lead, "post.m2", template="m2")
+    out = await asyncio.wait_for(process_task(t, deps), 5)
+    assert out.result.error_kind.value == "crash"
+    assert executor.calls == []  # no browser, so neither the probe nor the send happened
+
+
+async def test_a_task_that_outlives_every_deadline_is_abandoned(deps, executor, monkeypatch):
+    """The backstop: whatever unbounded await turns up inside process_task next, one task
+    must not hold the single browser and starve every task queued behind it."""
+    import linkedin_agent.core.runner as rn
+
+    async def never_returns(task, deps_):
+        await asyncio.sleep(3600)
+
+    monkeypatch.setattr(rn, "TASK_WALL_CLOCK_S", 0.05)
+    monkeypatch.setattr(rn, "process_task", never_returns)
+    lead, _ = await seed(deps, posts=[], profile={}, stage=LeadStage.NEW)
+    camp = deps.campaigns["test"]
+    t = seqeng.build_task(camp.step("warm.visit"), lead, camp, "default", NOW, {})
+    await deps.queue.enqueue(t)
+    n = await asyncio.wait_for(run_loop(deps, "default", once=True), 5)
+    assert n == 1
+    row = await deps.queue.get(t.id)
+    assert row.status == TaskStatus.FAILED and row.result["status"] == "stuck"
+    assert deps.pool.dead  # the browser it was holding is retired, not reused

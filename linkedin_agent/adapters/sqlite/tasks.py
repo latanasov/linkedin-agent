@@ -11,8 +11,11 @@ from ...models import Action, Task, TaskResult, TaskStatus
 from .db import Database, dumps, iso, loads, parse_dt
 
 # A running task whose claiming process is still alive is left alone this long at most;
-# after that the pid is assumed to have been reused and the task is requeued anyway.
-RUNNING_HARD_LIMIT_S = 24 * 3600
+# after that the pid is assumed to have been reused and the task is requeued anyway. This
+# used to be a day, which meant a live run loop stuck on one task starved the queue for a
+# day before anything noticed. The runner now abandons a task well inside this, so a row
+# still running at this age means the loop itself is no longer looking at it.
+RUNNING_HARD_LIMIT_S = 2 * 3600
 
 OPEN_STATUSES = (
     TaskStatus.QUEUED.value,
