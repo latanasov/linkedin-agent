@@ -1257,3 +1257,39 @@ async def test_a_task_that_outlives_every_deadline_is_abandoned(deps, executor, 
     row = await deps.queue.get(t.id)
     assert row.status == TaskStatus.FAILED and row.result["status"] == "stuck"
     assert deps.pool.dead  # the browser it was holding is retired, not reused
+
+
+async def test_a_replacement_task_checks_the_thread_before_sending_again(deps, executor):
+    """Seen live: the send went out, the task hung before recording it, the restart
+    requeued the row and the scheduler expired it as `window_missed`. The fresh task for
+    the same step is a new row, so `attempts` is 1 and the old retry guard never fired."""
+    lead, _ = await seed(deps, step="post.m1", branch="posts", stage=LeadStage.CONNECTED)
+    camp = deps.campaigns["test"]
+    lost = seqeng.build_task(camp.step("post.m1"), lead, camp, "default", NOW, {"template": "m1"})
+    await deps.queue.enqueue(lost)
+    await deps.queue.claim(lost.id, NOW)
+    await deps.queue.finish(lost.id, TaskResult(status="window_missed"), TaskStatus.SKIPPED)
+
+    executor.script(Action.CHECK_REPLIES, {"status": "already_sent"})
+    t = await enqueue_step(deps, lead, "post.m1", template="m1")
+    assert t.attempts == 1
+    out = await process_task(t, deps)
+    assert out.status == TaskStatus.DONE and out.result.status == "sent"
+    assert out.result.data["verified_by"] == "thread_check"
+    assert [c.action for c in executor.calls] == [Action.CHECK_REPLIES]  # nothing re-sent
+
+
+async def test_a_replacement_task_still_sends_when_the_thread_is_empty(deps, executor):
+    """The same guard must not block a genuine send when the lost attempt never acted."""
+    lead, _ = await seed(deps, step="post.m1", branch="posts", stage=LeadStage.CONNECTED)
+    camp = deps.campaigns["test"]
+    lost = seqeng.build_task(camp.step("post.m1"), lead, camp, "default", NOW, {"template": "m1"})
+    await deps.queue.enqueue(lost)
+    await deps.queue.claim(lost.id, NOW)
+    await deps.queue.finish(lost.id, TaskResult(status="window_missed"), TaskStatus.SKIPPED)
+
+    executor.script(Action.CHECK_REPLIES, {"status": "not_sent"})
+    t = await enqueue_step(deps, lead, "post.m1", template="m1")
+    out = await process_task(t, deps)
+    assert out.status == TaskStatus.DONE and out.result.status == "sent"
+    assert [c.action for c in executor.calls] == [Action.CHECK_REPLIES, Action.MESSAGE]

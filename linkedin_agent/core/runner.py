@@ -332,10 +332,12 @@ async def process_task(task: Task, deps: Deps) -> Outcome:
             now,
         )
 
-    # 7. execute (a retried message first checks the thread so a lost confirmation
-    #    does not turn into a duplicate send)
+    # 7. execute (a message whose predecessor may already have gone out first checks the
+    #    thread, so a lost confirmation does not turn into a duplicate send)
     result: TaskResult | None = None
-    if task.action in (Action.MESSAGE, Action.INMAIL) and task.attempts > 1:
+    if task.action in (Action.MESSAGE, Action.INMAIL) and (
+        task.attempts > 1 or await _unconfirmed_earlier_attempt(task, deps)
+    ):
         result = await _already_sent(task, browser, deps, now)
     try:
         if result is None:
@@ -470,6 +472,26 @@ async def _verify_cannot_connect(task: Task, browser: Any, deps: Deps, now: date
     return TaskResult(
         status="failed", error=f"cannot_connect unverified: check returned {check.status!r}"
     )
+
+
+async def _unconfirmed_earlier_attempt(task: Task, deps: Deps) -> bool:
+    """True when an earlier task for this same step reached the browser and did not end
+    in `done`, so whether it acted is unknown.
+
+    Seen live: a message task sent, then hung before it could record the send. The row
+    was requeued by the restart, expired as `window_missed`, and the fresh task the
+    scheduler built for the same step was one open window away from sending the same
+    text again. `attempts` lives on the row, so it cannot see across that replacement.
+    Only `done` means we watched the action confirm; anything else earns a thread check,
+    which is read-only and cheap against the cost of a prospect hearing it twice."""
+    if not (task.lead_id and task.step_id):
+        return False
+    for other in await deps.queue.for_lead(task.lead_id):
+        if other.id == task.id or other.step_id != task.step_id:
+            continue
+        if other.action == task.action and other.started_at and other.status != TaskStatus.DONE:
+            return True
+    return False
 
 
 async def _already_sent(task: Task, browser: Any, deps: Deps, now: datetime) -> TaskResult | None:
