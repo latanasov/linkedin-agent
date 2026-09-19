@@ -1293,3 +1293,46 @@ async def test_a_replacement_task_still_sends_when_the_thread_is_empty(deps, exe
     out = await process_task(t, deps)
     assert out.status == TaskStatus.DONE and out.result.status == "sent"
     assert [c.action for c in executor.calls] == [Action.CHECK_REPLIES, Action.MESSAGE]
+
+
+async def test_a_screenshot_that_hangs_does_not_hold_the_task(deps, executor, monkeypatch):
+    """Three connect tasks were abandoned at the 45 minute ceiling. The screenshot added
+    to diagnose connect failures takes the same event bus the failing task died in."""
+    import linkedin_agent.core.runner as rn
+
+    class HangingShot(FakePool):
+        async def get_browser(self, account):
+            browser = await super().get_browser(account)
+
+            async def take_screenshot():
+                await asyncio.sleep(3600)
+
+            browser.take_screenshot = take_screenshot
+            return browser
+
+    monkeypatch.setattr(rn, "SCREENSHOT_TIMEOUT_S", 0.05)
+    deps.pool = HangingShot()
+    lead, _ = await seed(deps, step="invite.posts", branch="posts", stage=LeadStage.WARMING)
+    executor.script(Action.CONNECT, {"status": "failed", "error": "note box never opened"})
+    t = await enqueue_step(deps, lead, "invite.posts", note_template="connection_note")
+    out = await asyncio.wait_for(process_task(t, deps), 5)
+    assert out.status in (TaskStatus.QUEUED, TaskStatus.FAILED)  # the failure is recorded
+    assert "screenshot" not in (out.result.data or {})
+
+
+async def test_a_session_check_that_hangs_does_not_hold_the_task(deps, executor, monkeypatch):
+    """The false-login_required check asks the browser a question. A browser wedged
+    enough to fake a login page is wedged enough not to answer."""
+    import linkedin_agent.core.runner as rn
+
+    class SlowVerify(FakePool):
+        async def verify_session(self, account):
+            await asyncio.sleep(3600)
+
+    monkeypatch.setattr(rn, "BROWSER_CLEANUP_TIMEOUT_S", 0.05)
+    deps.pool = SlowVerify()
+    lead, _ = await seed(deps, posts=[], profile={}, stage=LeadStage.NEW)
+    executor.script(Action.VISIT, {"status": "failed", "error": "login_required"})
+    t = await enqueue_step(deps, lead, "warm.visit")
+    out = await asyncio.wait_for(process_task(t, deps), 5)
+    assert out.stop is True  # unanswered means we believe the session is gone

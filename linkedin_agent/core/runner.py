@@ -59,6 +59,9 @@ BREAKER_HOURS = 48
 # loop for hours with no task even claimed. The executor's own budget starts after this.
 BROWSER_START_TIMEOUT_S = 180
 BROWSER_CLEANUP_TIMEOUT_S = 60
+# A screenshot of a page a task just failed on goes through the same event bus the task
+# may have died in. It is a diagnostic; it never gets to outlive the thing it documents.
+SCREENSHOT_TIMEOUT_S = 30
 # The backstop. Every await below has its own bound, but a new unbounded one keeps
 # surfacing: first the executor, then browser start, then the reply check's own browser
 # start, each found only after a task had held the single browser for hours. The loop
@@ -373,7 +376,13 @@ async def process_task(task: Task, deps: Deps) -> Outcome:
     result_kind = classify_result(result)
     if result_kind == ErrorKind.SESSION_EXPIRED:
         # A model looking at an empty page also says "login required". Ask the browser.
-        alive = await deps.pool.verify_session(account)
+        try:
+            alive = await with_deadline(
+                deps.pool.verify_session(account), BROWSER_CLEANUP_TIMEOUT_S, "session check"
+            )
+        except Exception as e:
+            logger.warning("Session check did not answer: %s", str(e)[:120])
+            alive = None
         if alive is True:
             logger.warning("Task reported login_required but the feed loads; treating as crash")
             result = TaskResult(status="error", error="false login_required: browser unstable")
@@ -678,7 +687,7 @@ async def _save_failure_screenshot(
         folder = deps.settings.home / "failures"
         folder.mkdir(parents=True, exist_ok=True)
         path = folder / f"{now:%Y%m%d-%H%M%S}-{task.action.value}-{task.id[:8]}.png"
-        data = await shot()
+        data = await with_deadline(shot(), SCREENSHOT_TIMEOUT_S, "failure screenshot")
         if not isinstance(data, bytes | bytearray) or not data:
             return
         path.write_bytes(data)
@@ -925,7 +934,15 @@ async def run_loop(
             if task is None:
                 if once:
                     break
-                await deps.pool.maybe_close_idle(deps.settings.idle_browser_timeout_s)
+                try:
+                    await with_deadline(
+                        deps.pool.maybe_close_idle(deps.settings.idle_browser_timeout_s),
+                        BROWSER_CLEANUP_TIMEOUT_S,
+                        "idle browser close",
+                    )
+                except Exception as e:
+                    logger.warning("Idle browser would not close: %s", str(e)[:120])
+                    deps.pool.mark_browser_dead()
                 await nap(min(25, tick_interval(deps)))
                 continue
             try:
