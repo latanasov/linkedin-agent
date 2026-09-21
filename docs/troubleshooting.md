@@ -184,6 +184,26 @@ If the agent still looks stopped, check the queue for a task stuck in `running` 
 log for the bubus warnings above. Clearing it by hand is `pkill -f chrome` followed by
 `systemctl restart linkedin-agent`; nothing is lost, the task is retried.
 
+## The governor paused and will not lift
+
+`status` shows `governor paused` and `connect 0/0`. The acceptance rate over invites sent
+between 21 and 3 days ago fell under 20% on a sample of at least ten, so invites and
+InMails are stopped. That is the governor working: the note is not landing, and it has
+stopped you spending the rest of the list on it.
+
+It cannot lift itself. A pause stops new invites, so the sample it paused on can only
+age out, and once it is smaller than ten the state is left as it is. So: rewrite the
+note first (the rate is the note's verdict, not the campaign's), then
+
+```
+linkedin-agent governor reset
+```
+
+which sets the state back to normal and records the moment. Invites sent before it are
+no longer counted; the ones after it, with the new note, stand on their own, and if they
+do no better the governor pauses again on that evidence three days in. `governor status`
+shows the state and where measurement starts.
+
 ## Failure screenshots
 
 Every task that fails with the browser still alive leaves a PNG of the page it failed on

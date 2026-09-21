@@ -185,6 +185,8 @@ async def test_pause_resume_review_breaker(svc, deps, campaign):
     await deps.accounts.save(acct)
     assert await svc.breaker_reset() == "Circuit breaker reset."
     assert (await deps.accounts.get("default")).tripped_until is None
+    assert (await svc.governor_reset()).startswith("Governor reset")
+    assert (await deps.accounts.get("default")).governor_reset_at is not None
     assert lead.id
 
 

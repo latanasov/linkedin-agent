@@ -16,6 +16,7 @@ from .models import (
     AccountState,
     Action,
     Campaign,
+    GovernorState,
     LeadRecord,
     LeadSequence,
     LeadStage,
@@ -61,9 +62,10 @@ async def update_governor(deps: Deps, account: str, now: datetime) -> str | None
     acct = await deps.accounts.get(account)
     if acct.governor_checked_at and now - acct.governor_checked_at < timedelta(days=1):
         return None
-    invited, accepted = await deps.leads.acceptance_sample(
-        now - GOVERNOR_LOOKBACK_START, now - GOVERNOR_LOOKBACK_END
-    )
+    start = now - GOVERNOR_LOOKBACK_START
+    if acct.governor_reset_at and acct.governor_reset_at > start:
+        start = acct.governor_reset_at  # older invites carried a note we no longer send
+    invited, accepted = await deps.leads.acceptance_sample(start, now - GOVERNOR_LOOKBACK_END)
     rate = (accepted / invited) if invited else None
     new_state = governor_state(acct.governor_state, rate, invited)
     changed = new_state != acct.governor_state
@@ -74,6 +76,23 @@ async def update_governor(deps: Deps, account: str, now: datetime) -> str | None
         pct = f"{rate:.0%}" if rate is not None else "n/a"
         return f"{new_state.value} (acceptance {pct} over {invited} invites)"
     return None
+
+
+async def reset_governor(deps: Deps, account: str, now: datetime) -> str:
+    """Lift a governor pause on purpose and start the acceptance measurement afresh.
+
+    Flipping the state alone lasts a day: the next check reads the same old invites and
+    pauses again, and since a pause stops new invites, nothing could ever change the
+    sample. The reset time excludes everything before it, so the invites that follow
+    (a rewritten note, usually) stand on their own. If they do no better, the governor
+    pauses again on their evidence."""
+    acct = await deps.accounts.get(account)
+    was = acct.governor_state.value
+    acct.governor_state = GovernorState.NORMAL
+    acct.governor_reset_at = now
+    acct.governor_checked_at = None
+    await deps.accounts.save(acct)
+    return f"Governor reset ({was} → normal); acceptance is measured from {now:%Y-%m-%d %H:%M}."
 
 
 async def tick(deps: Deps, account: str, now: datetime | None = None) -> TickReport:

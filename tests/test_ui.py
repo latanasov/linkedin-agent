@@ -191,6 +191,17 @@ async def test_breaker_reset(client, deps):
     assert (await client.get("/api/overview")).json()["account"]["breaker_tripped"] is False
 
 
+async def test_governor_reset(client, deps):
+    from linkedin_agent.models import GovernorState
+
+    acct = await deps.accounts.get("default")
+    acct.governor_state = GovernorState.PAUSED
+    await deps.accounts.save(acct)
+    r = await client.post("/api/governor/reset")
+    assert r.json()["message"].startswith("Governor reset (paused → normal)")
+    assert (await deps.accounts.get("default")).governor_state == GovernorState.NORMAL
+
+
 def test_ui_command_is_registered():
     from typer.testing import CliRunner
 

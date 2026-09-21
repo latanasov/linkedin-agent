@@ -78,7 +78,8 @@ CREATE TABLE IF NOT EXISTS accounts (
   consecutive_failures INTEGER NOT NULL DEFAULT 0,
   session_expired_at TEXT,
   governor_state TEXT NOT NULL DEFAULT 'normal',
-  governor_checked_at TEXT
+  governor_checked_at TEXT,
+  governor_reset_at TEXT
 );
 
 CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL);

@@ -30,7 +30,7 @@ from .core.proc import pid_alive
 from .core.prompts import validate_linkedin_url
 from .core.runner import Deps
 from .models import Action, Campaign, LeadRecord, LeadStage, Task, TaskStatus, parse_duration
-from .scheduler import resolve_review, restart_lead, retry_lead, skip_lead_step
+from .scheduler import reset_governor, resolve_review, restart_lead, retry_lead, skip_lead_step
 
 HEARTBEAT_FILE = "run.json"
 HEARTBEAT_STALE_S = 180
@@ -423,6 +423,9 @@ class Service:
         acct.tripped_until, acct.trip_reason, acct.consecutive_failures = None, None, 0
         await self.deps.accounts.save(acct)
         return "Circuit breaker reset."
+
+    async def governor_reset(self) -> str:
+        return await reset_governor(self.deps, self.account, self.deps.clock())
 
     # ── one-off actions: queued for the run loop ───────────────────────
 

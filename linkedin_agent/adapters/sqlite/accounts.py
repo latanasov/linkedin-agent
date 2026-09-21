@@ -25,19 +25,22 @@ class SqliteAccountStore:
             session_expired_at=parse_dt(row["session_expired_at"]),
             governor_state=GovernorState(row["governor_state"] or "normal"),
             governor_checked_at=parse_dt(row["governor_checked_at"]),
+            governor_reset_at=parse_dt(row["governor_reset_at"]),
         )
 
     async def save(self, state: AccountState) -> None:
         await self._db.execute(
             """INSERT INTO accounts(name, first_action_at, logged_in_at, user_agent, tripped_until, trip_reason,
-                                    consecutive_failures, session_expired_at, governor_state, governor_checked_at)
-               VALUES (?,?,?,?,?,?,?,?,?,?)
+                                    consecutive_failures, session_expired_at, governor_state, governor_checked_at,
+                                    governor_reset_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?)
                ON CONFLICT(name) DO UPDATE SET first_action_at=excluded.first_action_at,
                  logged_in_at=excluded.logged_in_at, user_agent=excluded.user_agent,
                  tripped_until=excluded.tripped_until, trip_reason=excluded.trip_reason,
                  consecutive_failures=excluded.consecutive_failures,
                  session_expired_at=excluded.session_expired_at, governor_state=excluded.governor_state,
-                 governor_checked_at=excluded.governor_checked_at""",
+                 governor_checked_at=excluded.governor_checked_at,
+                 governor_reset_at=excluded.governor_reset_at""",
             (
                 state.name,
                 iso(state.first_action_at),
@@ -49,6 +52,7 @@ class SqliteAccountStore:
                 iso(state.session_expired_at),
                 state.governor_state.value,
                 iso(state.governor_checked_at),
+                iso(state.governor_reset_at),
             ),
         )
         await self._db.commit()

@@ -372,3 +372,43 @@ async def test_tick_likes_via_the_activity_feed_when_the_stored_post_url_is_pois
     task = await deps.queue.open_task_for(lead.id, "warm.like")
     assert task is not None and task.params["post_url"] == ""
     build_prompt(task.action, task.profile_url, task.params)  # must not raise
+
+
+async def test_governor_reset_measures_only_invites_after_it(deps):
+    """A pause zeroes invites, so the sample it paused on can only decay: left alone the
+    governor never lifts. A reset draws a line; the invites before it (the old note)
+    are no longer evidence, and the ones after it stand on their own."""
+    from linkedin_agent.scheduler import reset_governor
+
+    for i in range(12):
+        ld = make_lead(linkedin_url=f"https://www.linkedin.com/in/old{i}/", first_name=f"O{i}")
+        await deps.leads.upsert_many([ld])
+        ld2 = await deps.leads.get(ld.id)
+        ld2.invited_at = NOW - timedelta(days=10)
+        if i < 1:
+            ld2.connected_at = NOW - timedelta(days=8)
+        await deps.leads.update(ld2)
+    assert (await update_governor(deps, "default", NOW)) is not None
+    assert (await deps.accounts.get("default")).governor_state == GovernorState.PAUSED
+
+    msg = await reset_governor(deps, "default", NOW)
+    assert msg.startswith("Governor reset (paused → normal)")
+    acct = await deps.accounts.get("default")
+    assert acct.governor_state == GovernorState.NORMAL and acct.governor_reset_at == NOW
+
+    # The very next check must not re-pause on the old invites: they are behind the line.
+    assert await update_governor(deps, "default", NOW + timedelta(hours=1)) is None
+    assert (await deps.accounts.get("default")).governor_state == GovernorState.NORMAL
+
+    # Invites sent after the reset are judged on their own. Twelve more, one accepted.
+    for i in range(12):
+        ld = make_lead(linkedin_url=f"https://www.linkedin.com/in/new{i}/", first_name=f"N{i}")
+        await deps.leads.upsert_many([ld])
+        ld2 = await deps.leads.get(ld.id)
+        ld2.invited_at = NOW + timedelta(days=1)
+        if i < 1:
+            ld2.connected_at = NOW + timedelta(days=2)
+        await deps.leads.update(ld2)
+    later = NOW + timedelta(days=6)
+    msg = await update_governor(deps, "default", later)
+    assert msg and msg.startswith("paused") and "12 invites" in msg

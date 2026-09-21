@@ -206,6 +206,12 @@ def test_pause_resume_retry_skip_breaker(home, fakes, tmp_path):
     assert "ok" in r.output
     r = runner.invoke(cli.app, ["breaker", "reset"])
     assert "reset" in r.output
+    r = runner.invoke(cli.app, ["governor", "status"])
+    assert "normal" in r.output
+    r = runner.invoke(cli.app, ["governor", "reset"])
+    assert "Governor reset" in r.output and "measured from" in r.output
+    r = runner.invoke(cli.app, ["governor", "status"])
+    assert "measuring since" in r.output
 
 
 def test_one_off_commands(home, fakes):

@@ -336,3 +336,15 @@ async def test_review_queue(db):
     assert (await r.get(t.id)).approved_text == "Edited."
     await r.submit(t.id, "comment", {}, "Draft two.")  # resubmit resets the decision
     assert len(await r.pending()) == 1
+
+
+async def test_account_governor_reset_at_round_trips(db):
+    from linkedin_agent.adapters.sqlite.accounts import SqliteAccountStore
+    from linkedin_agent.models import AccountState, GovernorState
+
+    store = SqliteAccountStore(db)
+    await store.save(
+        AccountState(name="a", governor_state=GovernorState.PAUSED, governor_reset_at=NOW)
+    )
+    got = await store.get("a")
+    assert got.governor_state == GovernorState.PAUSED and got.governor_reset_at == NOW

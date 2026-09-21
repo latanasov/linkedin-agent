@@ -180,6 +180,7 @@ account: governor normal · breaker ok
 | Start a lead over from the beginning | `linkedin-agent restart janedoe` |
 | Freeze a whole campaign | `linkedin-agent pause mine` / `linkedin-agent resume mine` |
 | Clear a tripped breaker you are sure is a false alarm | `linkedin-agent breaker reset` |
+| Lift a governor pause after rewriting the note | `linkedin-agent governor reset` |
 
 A lead is any of: the slug from their URL (`janedoe`), the full URL, their full name,
 or the id. Step ids are the `id:` values in your campaign file; `campaign show mine`

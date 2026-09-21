@@ -10,7 +10,7 @@ from typing import Any
 
 import aiosqlite
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 # Incremental changes for databases created at an older version. schema.sql always
 # describes the current shape for fresh databases; these bring existing ones up to it.
@@ -20,6 +20,10 @@ MIGRATIONS: dict[int, tuple[str, ...]] = {
     # requeued at once instead of after a fixed wait, and one a live process is still
     # working on is left alone however long it takes.
     3: ("ALTER TABLE tasks ADD COLUMN claimed_by INTEGER",),
+    # A governor pause zeroes invites, and without invites the acceptance sample can
+    # only decay, so a pause could never lift itself. A reset marks where measurement
+    # starts again, so a rewritten note is judged on its own invites.
+    4: ("ALTER TABLE accounts ADD COLUMN governor_reset_at TEXT",),
 }
 _SCHEMA_PATH = Path(__file__).with_name("schema.sql")
 

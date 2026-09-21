@@ -44,7 +44,14 @@ from .core.proc import pid_alive
 from .core.prompts import LINKEDIN_URL_RE
 from .core.runner import process_task, run_loop
 from .models import Action, LeadStage, Task
-from .scheduler import resolve_review, restart_lead, retry_lead, skip_lead_step, tick
+from .scheduler import (
+    reset_governor,
+    resolve_review,
+    restart_lead,
+    retry_lead,
+    skip_lead_step,
+    tick,
+)
 from .service import (
     Service,
     ServiceError,
@@ -59,8 +66,10 @@ logger = logging.getLogger(__name__)
 app = typer.Typer(help="Standalone local LinkedIn outreach agent.", no_args_is_help=True)
 campaign_app = typer.Typer(help="Manage campaign files.", no_args_is_help=True)
 breaker_app = typer.Typer(help="Circuit breaker.", no_args_is_help=True)
+governor_app = typer.Typer(help="Acceptance-rate governor.", no_args_is_help=True)
 app.add_typer(campaign_app, name="campaign")
 app.add_typer(breaker_app, name="breaker")
+app.add_typer(governor_app, name="governor")
 
 T = TypeVar("T")
 HEARTBEAT_EVERY_S = 20
@@ -903,6 +912,34 @@ def skip(lead: str) -> None:
         if rec is None:
             _fail(f"No lead matches {lead!r}")
         _echo(await skip_lead_step(app_.deps, rec, _now()))
+
+    _run(_with_app(go, need_llm=False))
+
+
+@governor_app.command("reset")
+def governor_reset(account: str = typer.Option(None)) -> None:
+    """Lift a pause on purpose and measure acceptance afresh from now.
+
+    For after the connection note has been rewritten: the old invites no longer say
+    anything about the note being sent. If the new one does no better, the governor
+    pauses again on its own evidence."""
+
+    async def go(app_: App) -> None:
+        _echo(await reset_governor(app_.deps, account or app_.settings.account, _now()))
+
+    _run(_with_app(go, need_llm=False))
+
+
+@governor_app.command("status")
+def governor_status(account: str = typer.Option(None)) -> None:
+    async def go(app_: App) -> None:
+        acct = await app_.deps.accounts.get(account or app_.settings.account)
+        line = acct.governor_state.value
+        if acct.governor_reset_at:
+            line += f" · measuring since {acct.governor_reset_at:%Y-%m-%d %H:%M}"
+        if acct.governor_checked_at:
+            line += f" · last checked {acct.governor_checked_at:%Y-%m-%d %H:%M}"
+        _echo(line)
 
     _run(_with_app(go, need_llm=False))
 

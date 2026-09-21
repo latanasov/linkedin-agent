@@ -368,3 +368,6 @@ class AccountState(BaseModel):
     session_expired_at: datetime | None = None
     governor_state: GovernorState = GovernorState.NORMAL
     governor_checked_at: datetime | None = None
+    # Invites before this are not the governor's business: the note changed, or the
+    # pause was lifted on purpose. Measurement starts again from here.
+    governor_reset_at: datetime | None = None
