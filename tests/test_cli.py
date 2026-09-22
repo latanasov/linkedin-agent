@@ -451,7 +451,10 @@ def test_run_exits_with_the_recycle_code(home, fakes, monkeypatch):
     async def wants_out(*a, **k):
         raise RecycleRequested("process at 1100 MB (limit 1024 MB)")
 
+    exits: list[int] = []
     monkeypatch.setattr(cli, "run_loop", wants_out)
+    monkeypatch.setattr(cli, "_hard_exit", exits.append)
+    monkeypatch.setattr(cli, "kill_stray_chrome", lambda settings: 0)
     r = runner.invoke(cli.app, ["run"])
-    assert r.exit_code == RECYCLE_EXIT_CODE
     assert "fresh process" in r.output
+    assert exits == [RECYCLE_EXIT_CODE]  # the process ends itself; asyncio teardown hangs

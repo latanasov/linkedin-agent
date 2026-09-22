@@ -983,6 +983,11 @@ async def run_loop(
                 break
             if outcome.status in (TaskStatus.DONE, TaskStatus.FAILED):
                 await nap(pacing_delay(deps, task.action))
+        except RecycleRequested:
+            # Not an error to back off from: the process is asked to end, and the
+            # memory it is asking about does not come back by waiting. Seen live: the
+            # request was caught here ten times, two minutes apart, before it got out.
+            raise
         except Exception as e:
             if not await survive("run loop iteration", e):
                 raise

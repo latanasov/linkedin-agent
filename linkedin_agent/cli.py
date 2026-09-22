@@ -32,6 +32,7 @@ from .core import messages as msg
 from .core import sequence as seqeng
 from .core.browser_pool import (
     LOGIN_URL,
+    kill_stray_chrome,
     launch_plain_chrome,
     resolve_chrome_executable,
     seed_li_at_cookie,
@@ -62,6 +63,13 @@ from .service import (
 )
 
 logger = logging.getLogger(__name__)
+
+# How a recycling run loop ends the process. asyncio.run's teardown waits for the
+# default executor's threads, and browser-use leaves hundreds behind that never finish;
+# the process printed its goodbye and then sat there, alive, with no heartbeat. The
+# browser is killed and the heartbeat cleared before this is called, and every database
+# write is already committed, so there is nothing left for a graceful exit to do.
+_hard_exit: Callable[[int], Any] = os._exit
 
 app = typer.Typer(help="Standalone local LinkedIn outreach agent.", no_args_is_help=True)
 campaign_app = typer.Typer(help="Manage campaign files.", no_args_is_help=True)
@@ -611,7 +619,10 @@ def run(
             clear_heartbeat(app_.settings)
         _echo(f"Processed {n} task(s).")
         if recycle:
-            raise typer.Exit(RECYCLE_EXIT_CODE)
+            kill_stray_chrome(app_.settings)
+            sys.stdout.flush()
+            sys.stderr.flush()
+            _hard_exit(RECYCLE_EXIT_CODE)
 
     try:
         _run(_with_app(go))

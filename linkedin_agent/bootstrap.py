@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from typing import Any
 
@@ -17,9 +18,12 @@ from .adapters.sqlite import (
 from .campaigns import load_all_user_campaigns
 from .config import Settings
 from .core.browser_pool import BrowserPool
+from .core.prompts import with_deadline
 from .core.runner import Deps
 from .llm import make_browser_llm, make_text_llm
 from .models import Campaign
+
+logger = logging.getLogger(__name__)
 
 
 class _LazyExecutor:
@@ -47,8 +51,17 @@ class App:
     deps: Deps
 
     async def close(self) -> None:
-        await self.deps.pool.shutdown()
-        await self.db.close()
+        # Both go through things that can hang (the browser's event bus, aiosqlite's
+        # thread). A process on its way out must get out; a close that will not finish
+        # is not worth more than the bound below.
+        for what, coro, seconds in (
+            ("browser shutdown", self.deps.pool.shutdown(), 45),
+            ("database close", self.db.close(), 15),
+        ):
+            try:
+                await with_deadline(coro, seconds, what)
+            except Exception as e:
+                logger.warning("%s did not finish: %s", what, str(e)[:120])
 
 
 async def build_app(

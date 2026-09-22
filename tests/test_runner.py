@@ -1349,8 +1349,13 @@ async def test_a_grown_process_hands_over_between_tasks(deps, executor, monkeypa
     t = seqeng.build_task(camp.step("warm.visit"), lead, camp, "default", NOW, {})
     await deps.queue.enqueue(t)
     monkeypatch.setattr(rn, "process_rss_mb", lambda: deps.settings.max_rss_mb + 1)
+    events: list[str] = []
     with pytest.raises(rn.RecycleRequested, match="MB"):
-        await run_loop(deps, "default", max_tasks=5)
+        await run_loop(deps, "default", max_tasks=5, on_event=events.append)
+    # once, straight out: not logged as a loop error, not backed off and retried ten
+    # times (seen live: twenty minutes of "recycling" lines before the process left)
+    assert [e for e in events if "failed" in e] == []
+    assert sum("recycling" in e for e in events) == 1
     # nothing was claimed: the check happens before a task is taken, not after
     assert (await deps.queue.get(t.id)).status == TaskStatus.QUEUED
     assert deps.pool.dead
