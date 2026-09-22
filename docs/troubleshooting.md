@@ -204,6 +204,18 @@ no longer counted; the ones after it, with the new note, stand on their own, and
 do no better the governor pauses again on that evidence three days in. `governor status`
 shows the state and where measurement starts.
 
+## The box is in swap and page-heavy tasks are failing
+
+`agentbox-check.sh` shows swap in use and `pgrep -c chrome` says a hundred or more.
+The pool restarts Chrome every twenty tasks and on memory pressure, and browser-use's
+kill did not always take the whole process tree with it, so each restart could leave
+one behind. Every close now sweeps whatever still holds the profile directory; the
+count should sit in the teens. The Python process also grows over days (1.5 GB after
+thirty hours, seen live): past `LINKEDIN_AGENT_MAX_RSS_MB` (1024) or
+`LINKEDIN_AGENT_MAX_RUN_HOURS` (24) the loop closes the browser between two tasks and
+exits with status 75, which the service unit's `Restart=on-failure` turns into a fresh
+process a minute later. The run log line is `recycling: …`; a task is never cut off.
+
 ## Failure screenshots
 
 Every task that fails with the browser still alive leaves a PNG of the page it failed on

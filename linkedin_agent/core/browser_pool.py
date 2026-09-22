@@ -230,6 +230,14 @@ class BrowserPool:
             except Exception:
                 logger.debug("Browser close failed", exc_info=True)
             self._browser = None
+        # browser-use's kill goes through its event bus and the launcher's own process
+        # handling; neither promises the whole Chrome tree is gone. Seen live: 173 Chrome
+        # processes after thirty hours, one tree per routine restart, the box in swap and
+        # the page-heavy tasks failing first. The pool owns exactly one browser, so after
+        # a close anything still holding the profile is a leak.
+        killed = kill_stray_chrome(self._settings)
+        if killed:
+            logger.warning("Killed %d Chrome process(es) left behind by the closed browser", killed)
 
     async def shutdown(self) -> None:
         await self._close_browser()

@@ -55,6 +55,12 @@ class Settings(BaseSettings):
     max_delay_s: int = 180
     tick_interval_s: int = 300
     idle_browser_timeout_s: int = 1800
+    # The run loop is meant to stay up for weeks, and the Python process grows while it
+    # does (browser-use keeps more per task than it lets go of; 1.5 GB after thirty hours,
+    # seen live). Past this, or past this many hours, the loop closes the browser between
+    # two tasks and exits with RECYCLE_EXIT_CODE for systemd to start it again.
+    max_rss_mb: int = 1024
+    max_run_hours: int = 24
     proxy_url: str | None = None
     default_timezone: str = "UTC"
     account: str = "default"

@@ -11,6 +11,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+import psutil
+
 from ..config import Settings
 from ..models import (
     READ_ONLY_ACTIONS,
@@ -85,6 +87,21 @@ IDENTICAL_WINDOW = timedelta(days=7)
 # systematically broken and it is better to stop than to spin.
 MAX_LOOP_ERRORS = 10
 LOOP_ERROR_BACKOFF_S = 30.0
+# Exit status the run loop uses to ask its supervisor for a fresh process. Non-zero, so
+# a unit with Restart=on-failure restarts it; distinct from 1, so a real failure still
+# reads as one in the journal.
+RECYCLE_EXIT_CODE = 75  # EX_TEMPFAIL
+
+
+class RecycleRequested(Exception):
+    """The loop has grown past its memory or age limit and wants a fresh process."""
+
+
+def process_rss_mb() -> float:
+    try:
+        return float(psutil.Process().memory_info().rss) / (1024 * 1024)
+    except Exception:
+        return 0.0
 
 
 def utcnow() -> datetime:
@@ -851,6 +868,7 @@ async def run_loop(
     loop = asyncio.get_event_loop()
     watch = SleepWatch(deps)
     loop_errors = 0
+    started_mono = deps.mono()
     session_announced = False
 
     async def woke(gap: float) -> None:
@@ -930,6 +948,11 @@ async def run_loop(
                     break
                 await nap(max(1.0, wait))
                 continue
+            worn = _worn_out(deps, started_mono)
+            if worn and not once:
+                emit(f"recycling: {worn}")
+                await _drop_browser(deps)
+                raise RecycleRequested(worn)
             task = await deps.queue.claim_next(account, now)
             if task is None:
                 if once:
@@ -964,6 +987,17 @@ async def run_loop(
             if not await survive("run loop iteration", e):
                 raise
     return processed
+
+
+def _worn_out(deps: Deps, started_mono: float) -> str | None:
+    """Why this process should hand over to a fresh one, or None while it is fine."""
+    rss = process_rss_mb()
+    if rss >= deps.settings.max_rss_mb:
+        return f"process at {rss:.0f} MB (limit {deps.settings.max_rss_mb} MB)"
+    hours = (deps.mono() - started_mono) / 3600
+    if hours >= deps.settings.max_run_hours:
+        return f"process up {hours:.0f}h (limit {deps.settings.max_run_hours}h)"
+    return None
 
 
 async def _after_wake(deps: Deps, gap_s: float, emit: Callable[[str], None]) -> None:

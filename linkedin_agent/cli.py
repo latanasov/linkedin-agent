@@ -42,7 +42,7 @@ from .core.browser_pool import (
 from .core.limits import account_age_days, ramp_week
 from .core.proc import pid_alive
 from .core.prompts import LINKEDIN_URL_RE
-from .core.runner import process_task, run_loop
+from .core.runner import RECYCLE_EXIT_CODE, RecycleRequested, process_task, run_loop
 from .models import Action, LeadStage, Task
 from .scheduler import (
     reset_governor,
@@ -594,18 +594,24 @@ def run(
 
         beat = asyncio.ensure_future(heartbeat())
         n = 0
+        recycle = False
         try:
             n = await run_loop(
                 deps, name, once=once, on_event=emit, tick=do_tick, max_tasks=max_tasks
             )
         except asyncio.CancelledError:
             _echo("Stopped.")
+        except RecycleRequested as e:
+            _echo(f"Exiting for a fresh process ({e}); the service restarts it.")
+            recycle = True
         finally:
             beat.cancel()
             for sig in installed:
                 loop.remove_signal_handler(sig)
             clear_heartbeat(app_.settings)
         _echo(f"Processed {n} task(s).")
+        if recycle:
+            raise typer.Exit(RECYCLE_EXIT_CODE)
 
     try:
         _run(_with_app(go))

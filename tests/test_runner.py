@@ -1336,3 +1336,34 @@ async def test_a_session_check_that_hangs_does_not_hold_the_task(deps, executor,
     t = await enqueue_step(deps, lead, "warm.visit")
     out = await asyncio.wait_for(process_task(t, deps), 5)
     assert out.stop is True  # unanswered means we believe the session is gone
+
+
+async def test_a_grown_process_hands_over_between_tasks(deps, executor, monkeypatch):
+    """The loop runs for weeks and the process grows while it does. Past the limit it
+    closes the browser at the idle point and asks for a fresh process; never mid-task."""
+    import linkedin_agent.core.runner as rn
+
+    lead, _ = await seed(deps, posts=[], profile={}, stage=LeadStage.NEW)
+    executor.script(Action.VISIT, {"status": "ok", "full_name": "Jane Doe", "posts": []})
+    camp = deps.campaigns["test"]
+    t = seqeng.build_task(camp.step("warm.visit"), lead, camp, "default", NOW, {})
+    await deps.queue.enqueue(t)
+    monkeypatch.setattr(rn, "process_rss_mb", lambda: deps.settings.max_rss_mb + 1)
+    with pytest.raises(rn.RecycleRequested, match="MB"):
+        await run_loop(deps, "default", max_tasks=5)
+    # nothing was claimed: the check happens before a task is taken, not after
+    assert (await deps.queue.get(t.id)).status == TaskStatus.QUEUED
+    assert deps.pool.dead
+
+
+async def test_once_mode_ignores_the_recycle_limit(deps, executor, monkeypatch):
+    """`run --once` is a one-shot; it drains and exits on its own."""
+    import linkedin_agent.core.runner as rn
+
+    lead, _ = await seed(deps, posts=[], profile={}, stage=LeadStage.NEW)
+    executor.script(Action.VISIT, {"status": "ok", "full_name": "Jane Doe", "posts": []})
+    camp = deps.campaigns["test"]
+    t = seqeng.build_task(camp.step("warm.visit"), lead, camp, "default", NOW, {})
+    await deps.queue.enqueue(t)
+    monkeypatch.setattr(rn, "process_rss_mb", lambda: deps.settings.max_rss_mb + 1)
+    assert await run_loop(deps, "default", once=True) == 1

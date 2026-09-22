@@ -244,3 +244,21 @@ def test_kill_stray_chrome_only_touches_this_agents_profile(tmp_path, monkeypatc
     monkeypatch.setattr(bp, "psutil", fake)
     assert bp.kill_stray_chrome(settings) == 2
     assert killed == [1, 2]  # the agent's own, not the user's Chrome, not a python process
+
+
+async def test_closing_the_browser_sweeps_what_kill_left_behind(tmp_path: Path, monkeypatch):
+    """Seen live: 173 Chrome processes after thirty hours, one tree per routine restart.
+    browser-use's kill does not promise the tree is gone; the pool does."""
+    pool = bp.BrowserPool(Settings(home=tmp_path, openrouter_api_key="k"))
+    s = _Session(["a"], "a")
+    sweeps: list[int] = []
+
+    async def fake_create(account, *, headless):
+        return s
+
+    monkeypatch.setattr(bp, "kill_stray_chrome", lambda settings: sweeps.append(1) or 3)
+    pool._create_browser = fake_create  # type: ignore[method-assign]
+    await pool.get_browser("default")
+    await pool.shutdown()
+    # once before the first browser starts (a clean slate), once after it is closed
+    assert s.killed and sweeps == [1, 1]

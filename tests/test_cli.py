@@ -443,3 +443,15 @@ def test_stop_signals_the_loop_and_reports(home):
     finally:
         if other.poll() is None:
             other.kill()
+
+
+def test_run_exits_with_the_recycle_code(home, fakes, monkeypatch):
+    from linkedin_agent.core.runner import RECYCLE_EXIT_CODE, RecycleRequested
+
+    async def wants_out(*a, **k):
+        raise RecycleRequested("process at 1100 MB (limit 1024 MB)")
+
+    monkeypatch.setattr(cli, "run_loop", wants_out)
+    r = runner.invoke(cli.app, ["run"])
+    assert r.exit_code == RECYCLE_EXIT_CODE
+    assert "fresh process" in r.output
