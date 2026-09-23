@@ -215,7 +215,7 @@ def test_inmail_goes_through_sales_navigator_not_the_overlay():
     p = build_prompt(Action.INMAIL, URL, {"subject": "s", "text": "hi"})
     assert "Close any small chat windows" in p
     assert '"View in Sales Navigator"' in p
-    assert "compose dialog opens in the middle of the page" in p
+    assert "compose dialog opens in the" in p and "middle of the page with a Subject field" in p
     assert "never click the compose (pencil) icon" in p
     assert 'window titled "New message" with a name search field' in p
     assert "close it with its X" in p and "never type into it" in p

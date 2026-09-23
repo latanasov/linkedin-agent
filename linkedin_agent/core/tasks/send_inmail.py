@@ -33,18 +33,18 @@ def build_prompt(profile_url: str, params: dict[str, Any]) -> str:
         reach = """3. Close any small chat windows open at the bottom-right of the page (each has an X in
    its header) so nothing is in the way. Do not open the Messaging bar itself.
 4. Get to this person's Sales Navigator lead page: open the "More" menu (the "..." button
-   in the profile header, next to the Message button) and click "View in Sales
-   Navigator". If it opens in a new tab, continue there. If the menu has no such entry,
-   click "Save in Sales Navigator" and then the Sales Navigator link it offers."""
+   in the profile header, next to the Message button) and click "View in Sales Navigator".
+   If it opens in a new tab, continue there. If the menu has no such entry, click
+   "Save in Sales Navigator" and then the Sales Navigator link it offers."""
     return f"""You are on LinkedIn, already logged in. Send one InMail through Sales Navigator.
 
 1. Navigate to: {profile_url}
 2. If the page shows a login form or checkpoint, return {{"status": "failed", "error": "login_required"}}.
    {MISSING_PROFILE_RULE}
 {reach}
-5. On the Sales Navigator lead page, click "Message". A compose dialog opens in the middle
-   of the page with a Subject field, a message body and a Send button. It may mention how
-   many InMail credits you have; that is normal.
+5. On the Sales Navigator lead page, click "Message". A compose dialog opens in the
+   middle of the page with a Subject field, a message body and a Send button. It may
+   mention how many InMail credits you have; that is normal.
 6. If an existing conversation is shown instead, note the first 100 characters of the most
    recent message written by THEM (you will return it as "prior_reply_text"; empty if none).
 7. Click the Subject field and type exactly: {subject}
