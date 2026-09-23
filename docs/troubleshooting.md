@@ -216,6 +216,19 @@ thirty hours, seen live): past `LINKEDIN_AGENT_MAX_RSS_MB` (1024) or
 exits with status 75, which the service unit's `Restart=on-failure` turns into a fresh
 process a minute later. The run log line is `recycling: …`; a task is never cut off.
 
+## InMails fail while messages to connections work
+
+The profile's own Message button opens an InMail in the bottom-right messaging overlay:
+a small panel, sharing the corner with any chat bubbles earlier tasks left open, with
+the Send button below the fold. Two days live it sent 5 and failed 8, and the failures
+ended with the model clicking the overlay's compose icon and typing the person's name
+into a "New message" search, which lists every stranger with that name. The InMail
+prompt now goes through the person's Sales Navigator lead page ("View in Sales
+Navigator" under the profile's More menu), whose Message button opens a centred dialog
+with Subject, body and Send. If InMails still fail, the failure screenshot shows which
+page the model ended on; a "New message" window with a name field means it fell back
+to the overlay, and the prompt's hard stop for that window is what to check.
+
 ## Failure screenshots
 
 Every task that fails with the browser still alive leaves a PNG of the page it failed on

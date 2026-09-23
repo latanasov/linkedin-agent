@@ -203,7 +203,22 @@ def test_inmail_prompt_requires_subject_and_text():
         "https://www.linkedin.com/sales/lead/ABC,x,y",
         {"subject": "Hi", "text": "Body"},
     )
-    assert "Sales Navigator" in p
+    assert "already on the person's Sales Navigator lead page" in p
+    assert "View in Sales Navigator" not in p
+
+
+def test_inmail_goes_through_sales_navigator_not_the_overlay():
+    """Two days live: 5 sent, 8 failed. The profile's Message button opens the InMail
+    compose in the cramped bottom-right overlay, next to whatever chat bubbles earlier
+    tasks left open; the model gave up on it, clicked the overlay's compose icon, typed
+    the person's name into a "New message" search and faced eight strangers."""
+    p = build_prompt(Action.INMAIL, URL, {"subject": "s", "text": "hi"})
+    assert "Close any small chat windows" in p
+    assert '"View in Sales Navigator"' in p
+    assert "compose dialog opens in the middle of the page" in p
+    assert "never click the compose (pencil) icon" in p
+    assert 'window titled "New message" with a name search field' in p
+    assert "close it with its X" in p and "never type into it" in p
 
 
 def test_comment_prompt_requires_text_and_uses_post_url():

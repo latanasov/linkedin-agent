@@ -21,7 +21,8 @@ MAX_STEPS: dict[Action, int] = {
     Action.CONNECT: 20,
     Action.WITHDRAW_INVITE: 8,
     Action.MESSAGE: 16,
-    Action.INMAIL: 16,
+    # Three more than a message: the More menu, "View in Sales Navigator", a tab switch.
+    Action.INMAIL: 20,
 }
 
 
