@@ -14,7 +14,11 @@ from ..models import Action, Task, TaskResult
 MAX_STEPS: dict[Action, int] = {
     Action.VISIT: 12,
     Action.CHECK_CONNECTION: 6,
-    Action.CHECK_REPLIES: 8,
+    # Also the duplicate check before a retried send, where running out of steps fails
+    # the send itself (an unanswered check must not become a second message). Eight was
+    # too few to open the overlay and read a thread: Deepali's follow-up failed three
+    # times on the check alone ("9 of 8 steps"), and an InMail retry on "5 of 8".
+    Action.CHECK_REPLIES: 12,
     Action.FOLLOW: 8,
     Action.LIKE_POST: 8,
     Action.COMMENT_POST: 12,
