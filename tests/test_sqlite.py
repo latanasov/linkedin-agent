@@ -313,6 +313,7 @@ async def test_accounts_roundtrip(db):
     acct.governor_state = GovernorState.HALVED
     acct.consecutive_failures = 2
     await store.save(acct)
+    await store.save_governor(acct)
     back = await store.get("default")
     assert (
         back.tripped_until == NOW + timedelta(hours=48)
@@ -343,7 +344,7 @@ async def test_account_governor_reset_at_round_trips(db):
     from linkedin_agent.models import AccountState, GovernorState
 
     store = SqliteAccountStore(db)
-    await store.save(
+    await store.save_governor(
         AccountState(name="a", governor_state=GovernorState.PAUSED, governor_reset_at=NOW)
     )
     got = await store.get("a")

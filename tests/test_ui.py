@@ -196,7 +196,7 @@ async def test_governor_reset(client, deps):
 
     acct = await deps.accounts.get("default")
     acct.governor_state = GovernorState.PAUSED
-    await deps.accounts.save(acct)
+    await deps.accounts.save_governor(acct)
     r = await client.post("/api/governor/reset")
     assert r.json()["message"].startswith("Governor reset (paused → normal)")
     assert (await deps.accounts.get("default")).governor_state == GovernorState.NORMAL

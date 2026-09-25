@@ -200,7 +200,7 @@ async def test_governor_paused_blocks_invites_but_not_visits(deps, executor):
     lead, _ = await seed(deps, step="invite.posts", branch="posts")
     acct = await deps.accounts.get("default")
     acct.governor_state = GovernorState.PAUSED
-    await deps.accounts.save(acct)
+    await deps.accounts.save_governor(acct)
     t = await enqueue_step(deps, lead, "invite.posts", note="")
     assert (await process_task(t, deps)).note == "rate_limited"
     v = await enqueue_step(deps, lead, "warm.visit")

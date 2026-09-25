@@ -29,6 +29,12 @@ class SqliteAccountStore:
         )
 
     async def save(self, state: AccountState) -> None:
+        """Write everything but the governor's fields; save_governor owns those.
+
+        A task loads the account when it starts and saves it when it ends, minutes
+        later. Writing the governor back from that copy undid a `governor reset` made in
+        between (seen live: reset, then paused the next morning on the evidence the reset
+        had excluded). New rows still start from the state's governor values."""
         await self._db.execute(
             """INSERT INTO accounts(name, first_action_at, logged_in_at, user_agent, tripped_until, trip_reason,
                                     consecutive_failures, session_expired_at, governor_state, governor_checked_at,
@@ -38,9 +44,7 @@ class SqliteAccountStore:
                  logged_in_at=excluded.logged_in_at, user_agent=excluded.user_agent,
                  tripped_until=excluded.tripped_until, trip_reason=excluded.trip_reason,
                  consecutive_failures=excluded.consecutive_failures,
-                 session_expired_at=excluded.session_expired_at, governor_state=excluded.governor_state,
-                 governor_checked_at=excluded.governor_checked_at,
-                 governor_reset_at=excluded.governor_reset_at""",
+                 session_expired_at=excluded.session_expired_at""",
             (
                 state.name,
                 iso(state.first_action_at),
@@ -53,6 +57,21 @@ class SqliteAccountStore:
                 state.governor_state.value,
                 iso(state.governor_checked_at),
                 iso(state.governor_reset_at),
+            ),
+        )
+        await self._db.commit()
+
+    async def save_governor(self, state: AccountState) -> None:
+        """Write the governor's state, when it was last checked, and where it measures from."""
+        await self.get(state.name)  # the row exists from here on
+        await self._db.execute(
+            """UPDATE accounts SET governor_state=?, governor_checked_at=?, governor_reset_at=?
+               WHERE name=?""",
+            (
+                state.governor_state.value,
+                iso(state.governor_checked_at),
+                iso(state.governor_reset_at),
+                state.name,
             ),
         )
         await self._db.commit()

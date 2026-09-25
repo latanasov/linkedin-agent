@@ -107,6 +107,8 @@ class AccountStore(Protocol):
 
     async def save(self, state: AccountState) -> None: ...
 
+    async def save_governor(self, state: AccountState) -> None: ...
+
 
 class ReviewQueue(Protocol):
     async def submit(

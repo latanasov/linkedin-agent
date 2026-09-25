@@ -71,7 +71,7 @@ async def update_governor(deps: Deps, account: str, now: datetime) -> str | None
     changed = new_state != acct.governor_state
     acct.governor_state = new_state
     acct.governor_checked_at = now
-    await deps.accounts.save(acct)
+    await deps.accounts.save_governor(acct)
     if changed:
         pct = f"{rate:.0%}" if rate is not None else "n/a"
         return f"{new_state.value} (acceptance {pct} over {invited} invites)"
@@ -91,7 +91,7 @@ async def reset_governor(deps: Deps, account: str, now: datetime) -> str:
     acct.governor_state = GovernorState.NORMAL
     acct.governor_reset_at = now
     acct.governor_checked_at = None
-    await deps.accounts.save(acct)
+    await deps.accounts.save_governor(acct)
     return f"Governor reset ({was} → normal); acceptance is measured from {now:%Y-%m-%d %H:%M}."
 
 

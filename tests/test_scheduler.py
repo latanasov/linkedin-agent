@@ -412,3 +412,21 @@ async def test_governor_reset_measures_only_invites_after_it(deps):
     later = NOW + timedelta(days=6)
     msg = await update_governor(deps, "default", later)
     assert msg and msg.startswith("paused") and "12 invites" in msg
+
+
+async def test_a_task_finishing_after_a_reset_does_not_undo_it(deps):
+    """Seen live: `governor reset` while a task was running; the task then saved the
+    account copy it loaded before the reset, the reset was gone, and the next morning's
+    check paused on exactly the invites the reset had excluded."""
+    from linkedin_agent.scheduler import reset_governor
+
+    stale = await deps.accounts.get("default")  # a task starts
+    acct = await deps.accounts.get("default")
+    acct.governor_state = GovernorState.PAUSED
+    await deps.accounts.save_governor(acct)
+    await reset_governor(deps, "default", NOW)  # the user resets mid-task
+    stale.consecutive_failures = 1
+    await deps.accounts.save(stale)  # the task ends and saves what it loaded
+    back = await deps.accounts.get("default")
+    assert back.governor_state == GovernorState.NORMAL and back.governor_reset_at == NOW
+    assert back.consecutive_failures == 1  # the task's own fields still land
