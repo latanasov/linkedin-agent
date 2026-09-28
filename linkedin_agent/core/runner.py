@@ -553,14 +553,21 @@ async def _check_replied_first(
 ) -> Outcome | None:
     """Run a read-only reply check before sending a message. Returns an Outcome if the
     message must not be sent, else None."""
+    snippet = (lead.last_message_text or "")[:80]
     if not lead.last_message_at:
-        return None  # nothing sent yet, nothing to check
+        # The first message after an accept: the connection note is the one thing we
+        # have said, and a note that invites a conversation gets answered. Seen live:
+        # "Let me know how I can help" in reply to the note, and the first campaign
+        # message went out on top of it because nothing had been "sent" yet.
+        snippet = (await _sent_note(lead, deps))[:80]
+        if not snippet:
+            return None  # a bare invite: nothing of ours in the thread to answer
     probe = Task(
         lead_id=lead.id,
         action=Action.CHECK_REPLIES,
         profile_url=task.profile_url,
         account=task.account,
-        params={"last_message_snippet": (lead.last_message_text or "")[:80]},
+        params={"last_message_snippet": snippet},
     )
     try:
         browser = await with_deadline(
@@ -591,6 +598,20 @@ async def _check_replied_first(
             task, deps, TaskStatus.SKIPPED, TaskResult(status="replied_before_send")
         )
     return None
+
+
+async def _sent_note(lead: LeadRecord, deps: Deps) -> str:
+    """The note on the invite this lead accepted, or "" if it went without one."""
+    note = ""
+    for t in await deps.queue.for_lead(lead.id):  # oldest first; the last sent one wins
+        if t.action != Action.CONNECT or t.status != TaskStatus.DONE:
+            continue
+        status = (t.result or {}).get("status")
+        if status == "sent":
+            note = str(t.params.get("note") or "")
+        elif status == "sent_without_note":
+            note = ""
+    return note.strip()
 
 
 async def _advance_sequence(

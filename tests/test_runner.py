@@ -1372,3 +1372,52 @@ async def test_once_mode_ignores_the_recycle_limit(deps, executor, monkeypatch):
     await deps.queue.enqueue(t)
     monkeypatch.setattr(rn, "process_rss_mb", lambda: deps.settings.max_rss_mb + 1)
     assert await run_loop(deps, "default", once=True) == 1
+
+
+async def _accepted_after_note(deps, note="Hi Jane - would be good to connect."):
+    """A lead whose invite with `note` went out and was accepted; next step is m1."""
+    lead, _ = await seed(deps, step="post.m1", branch="posts", stage=LeadStage.CONNECTED)
+    camp = deps.campaigns["test"]
+    inv = seqeng.build_task(camp.step("invite.posts"), lead, camp, "default", NOW, {"note": note})
+    await deps.queue.enqueue(inv)
+    await deps.queue.claim(inv.id, NOW)
+    await deps.queue.finish(
+        inv.id, TaskResult(status="sent" if note else "sent_without_note"), TaskStatus.DONE
+    )
+    return lead
+
+
+async def test_a_reply_to_the_connection_note_stops_the_first_message(deps, executor):
+    """Seen live: "Let me know how I can help" in reply to the note, and the first
+    campaign message went out on top of it. The note is our last word; check below it."""
+    lead = await _accepted_after_note(deps)
+    executor.script(
+        Action.CHECK_REPLIES,
+        {
+            "status": "replied",
+            "reply_after_ours": True,
+            "last_reply_text": "Let me know how I can help",
+        },
+    )
+    t = await enqueue_step(deps, lead, "post.m1", template="m1")
+    out = await process_task(t, deps)
+    assert out.status == TaskStatus.SKIPPED and out.result.status == "replied_before_send"
+    assert [c.action for c in executor.calls] == [Action.CHECK_REPLIES]  # nothing sent
+    assert executor.calls[0].params["last_message_snippet"].startswith("Hi Jane - would be")
+    assert (await deps.leads.get(lead.id)).stage == LeadStage.REPLIED
+
+
+async def test_no_reply_to_the_note_lets_the_first_message_go(deps, executor):
+    lead = await _accepted_after_note(deps)
+    executor.script(Action.CHECK_REPLIES, {"status": "none", "reply_after_ours": False})
+    t = await enqueue_step(deps, lead, "post.m1", template="m1")
+    out = await process_task(t, deps)
+    assert out.status == TaskStatus.DONE and out.result.status == "sent"
+    assert [c.action for c in executor.calls] == [Action.CHECK_REPLIES, Action.MESSAGE]
+
+
+async def test_a_bare_invite_has_no_note_to_check_below(deps, executor):
+    lead = await _accepted_after_note(deps, note="")
+    t = await enqueue_step(deps, lead, "post.m1", template="m1")
+    await process_task(t, deps)
+    assert [c.action for c in executor.calls] == [Action.MESSAGE]
