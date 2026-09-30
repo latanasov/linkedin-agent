@@ -1421,3 +1421,15 @@ async def test_a_bare_invite_has_no_note_to_check_below(deps, executor):
     t = await enqueue_step(deps, lead, "post.m1", template="m1")
     await process_task(t, deps)
     assert [c.action for c in executor.calls] == [Action.MESSAGE]
+
+
+def test_the_duplicate_probe_skips_a_greeting_line():
+    """A new template to someone who already had an older one: both open with "Hi Aman,",
+    and probing for that found the old message and skipped the new one as already sent."""
+    from linkedin_agent.core.runner import _probe_line
+
+    new = "Hi Aman,\n\nI'm Lyubomir, Product Manager at Progress, where I lead Progress Agent Engineering."
+    assert _probe_line(new).startswith("I'm Lyubomir, Product Manager")
+    assert _probe_line("Hi Jane, thanks for connecting.\nMore") == "Hi Jane, thanks for connecting."
+    assert _probe_line("Hi Jo,\nok") == "Hi Jo,"  # nothing longer: keep what there is
+    assert _probe_line("   ") == ""

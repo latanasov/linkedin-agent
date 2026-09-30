@@ -520,11 +520,20 @@ async def _unconfirmed_earlier_attempt(task: Task, deps: Deps) -> bool:
     return False
 
 
+def _probe_line(text: str) -> str:
+    """The line that identifies a message in a thread: the first one long enough to be
+    about something. A greeting alone ("Hi Aman,") opens every template, so looking for
+    it found an older message to the same person and reported the new one as sent."""
+    lines = [ln.strip() for ln in text.strip().splitlines() if ln.strip()]
+    if not lines:
+        return ""
+    return next((ln for ln in lines if len(ln) >= 30), lines[0])[:80]
+
+
 async def _already_sent(task: Task, browser: Any, deps: Deps, now: datetime) -> TaskResult | None:
     """Before re-sending a message whose first attempt failed, look at the thread. If a
     message beginning with the same text is already there, report it as sent instead."""
-    text = str(task.params.get("text") or "")
-    probe_text = text.strip().splitlines()[0][:80] if text.strip() else ""
+    probe_text = _probe_line(str(task.params.get("text") or ""))
     if not probe_text:
         return None
     probe = Task(
