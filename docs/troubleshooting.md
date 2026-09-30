@@ -204,6 +204,9 @@ no longer counted; the ones after it, with the new note, stand on their own, and
 do no better the governor pauses again on that evidence three days in. `governor status`
 shows the state and where measurement starts.
 
+If you would rather keep going at half speed than stop, set
+`LINKEDIN_AGENT_GOVERNOR_FLOOR=halved` (see [Safety and limits](safety.md#the-governor)).
+
 ## The box is in swap and page-heavy tasks are failing
 
 `agentbox-check.sh` shows swap in use and `pgrep -c chrome` says a hundred or more.

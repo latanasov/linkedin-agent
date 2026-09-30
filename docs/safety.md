@@ -62,6 +62,18 @@ rate over invites sent 3 to 21 days ago, once a day:
 It needs at least 10 invites in the window before it acts. If you see "governor halved",
 look at your targeting and your profile before increasing volume.
 
+You can set how far it is allowed to cut, in `~/.linkedin-agent/.env`:
+
+```
+LINKEDIN_AGENT_GOVERNOR_FLOOR=halved
+```
+
+`paused` (the default) lets it stop invites and InMails. `halved` keeps them going at
+half the caps whatever the rate; `normal` switches the governor off. `status` then shows
+both the verdict and what is applied: `governor paused (held at halved by governor_floor)`.
+Loosening it means spending more of the list, and more of the account's standing with
+LinkedIn, on a note that is not landing, so it is a choice to make on purpose.
+
 ## The circuit breaker
 
 The agent trips for 48 hours, and stops scheduling anything, when either happens:

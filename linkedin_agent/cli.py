@@ -739,9 +739,12 @@ def status(account: str = typer.Option(None)) -> None:
         if health["breaker_tripped"]:
             until = health["tripped_until"][:16].replace("T", " ")
             breaker = f"TRIPPED until {until} ({health['trip_reason']})"
+        governor = health["governor"]
+        if health["governor_held_at"]:
+            governor += f" (held at {health['governor_held_at']} by governor_floor)"
         _echo(
             f"account {name} · {login_state} · breaker {breaker} · "
-            f"governor {health['governor']} · ramp week {health['ramp_week']}"
+            f"governor {governor} · ramp week {health['ramp_week']}"
         )
         # The pid matters: a detached run is stopped with `kill`, there being no `stop`.
         state = run_state(app_.settings)

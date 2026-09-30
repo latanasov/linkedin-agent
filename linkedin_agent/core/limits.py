@@ -42,6 +42,14 @@ GOVERNOR_HALVE_BELOW = 0.30
 GOVERNOR_RECOVER_AT = 0.35
 GOVERNOR_MIN_SAMPLE = 10
 
+_LENIENCY = (GovernorState.PAUSED, GovernorState.HALVED, GovernorState.NORMAL)
+
+
+def held_at_floor(state: GovernorState, floor: GovernorState) -> GovernorState:
+    """The state the caps follow: the governor's verdict, but never stricter than the
+    floor the user set. The default floor is "paused", which leaves the verdict alone."""
+    return state if _LENIENCY.index(state) >= _LENIENCY.index(floor) else floor
+
 
 def _round_half_up(x: float) -> int:
     return int(math.floor(x + 0.5))
@@ -74,10 +82,12 @@ def effective_cap(
     governor: GovernorState = GovernorState.NORMAL,
     user_cap: int | None = None,
     tier: str = "pro",
+    governor_floor: GovernorState = GovernorState.PAUSED,
 ) -> tuple[int, int | None]:
     """Return (daily cap, weekly cap or None) after ramp, governor, user cap and tier ceiling."""
     day, week = BASE_CAPS[action]
     m = ramp_multiplier(age_days)
+    governor = held_at_floor(governor, governor_floor)
     if action in GOVERNED_ACTIONS:
         if governor == GovernorState.PAUSED:
             return 0, 0

@@ -20,6 +20,7 @@ from ..models import (
     Action,
     Campaign,
     ErrorKind,
+    GovernorState,
     LeadRecord,
     LeadStage,
     Task,
@@ -176,6 +177,7 @@ def caps_for(
         acct.governor_state,
         deps.settings.user_cap(action.value),
         deps.settings.tier,
+        GovernorState(deps.settings.governor_floor),
     )
 
 

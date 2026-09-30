@@ -148,7 +148,7 @@ function renderOverview(o) {
   const login = {logged_in:['ok','logged in'], profile_exists:['warn','profile, not verified'], not_logged_in:['bad','NOT logged in'], session_expired:['bad','SESSION EXPIRED – run login']}[a.login];
   const breaker = a.breaker_tripped ? `<span class="pill bad" title="${esc(a.trip_reason)}">breaker tripped until ${esc(new Date(a.tripped_until).toLocaleString())} <button class="act" onclick="act('/api/breaker/reset')">reset</button></span>` : '<span class="pill ok">breaker ok</span>';
   const gov = a.governor==='normal' ? 'ok' : a.governor==='halved' ? 'warn' : 'bad';
-  $('#acct').innerHTML = `<span class="pill">${esc(a.account)}</span> <span class="pill ${login[0]}">${login[1]}</span> ${breaker} <span class="pill ${gov}">governor ${esc(a.governor)}</span> <span class="pill">ramp week ${a.ramp_week}</span>`;
+  $('#acct').innerHTML = `<span class="pill">${esc(a.account)}</span> <span class="pill ${login[0]}">${login[1]}</span> ${breaker} <span class="pill ${gov}">governor ${esc(a.governor)}${a.governor_held_at ? ' (held at ' + esc(a.governor_held_at) + ')' : ''}</span> <span class="pill">ramp week ${a.ramp_week}</span>`;
   $('#fast').hidden = !o.fast_test;
   $('#usage').innerHTML = o.usage.map(u => {
     const pct = u.day_cap ? Math.min(100, 100*u.day/u.day_cap) : 0;

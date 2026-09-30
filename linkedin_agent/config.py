@@ -45,6 +45,12 @@ class Settings(BaseSettings):
     # partway up; 3 is 60%. 5 skips the ramp, which is the overnight jump it guards
     # against — that is the user's call to make explicitly, never a default.
     ramp_start_week: int = Field(default=1, ge=1, le=5)
+    # The least the acceptance-rate governor can leave invites and InMails at. "paused"
+    # (default) lets it stop them under 20% acceptance; "halved" keeps them going at half
+    # the caps whatever the rate; "normal" turns the governor off. Loosening it spends the
+    # list, and the account's standing with LinkedIn, on a note that is not landing: the
+    # user's call to make explicitly, never a default.
+    governor_floor: Literal["paused", "halved", "normal"] = "paused"
     daily_visit_limit: int | None = None
     daily_connect_limit: int | None = None
     daily_message_limit: int | None = None

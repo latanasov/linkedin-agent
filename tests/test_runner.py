@@ -207,6 +207,26 @@ async def test_governor_paused_blocks_invites_but_not_visits(deps, executor):
     assert (await process_task(v, deps)).status == TaskStatus.DONE
 
 
+async def test_governor_floor_halved_keeps_invites_going_at_half(deps, executor):
+    from linkedin_agent import reporting
+    from linkedin_agent.core.runner import caps_for
+
+    lead, _ = await seed(deps, step="invite.posts", branch="posts")
+    acct = await deps.accounts.get("default")
+    acct.governor_state = GovernorState.PAUSED
+    await deps.accounts.save_governor(acct)
+    deps.settings.ramp_start_week = 5
+    deps.settings.governor_floor = "halved"
+    assert caps_for(deps, acct, Action.CONNECT, NOW) == (10, 45)
+    assert caps_for(deps, acct, Action.INMAIL, NOW)[0] == 10
+    t = await enqueue_step(deps, lead, "invite.posts", note="")
+    assert (await process_task(t, deps)).status == TaskStatus.DONE
+    health = await reporting.account_health(deps, "default", NOW)
+    assert health["governor"] == "paused" and health["governor_held_at"] == "halved"
+    deps.settings.governor_floor = "paused"
+    assert (await reporting.account_health(deps, "default", NOW))["governor_held_at"] is None
+
+
 async def test_breaker_tripped_parks_task(deps, executor):
     lead, _ = await seed(deps)
     acct = await deps.accounts.get("default")

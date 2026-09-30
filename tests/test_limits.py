@@ -6,6 +6,7 @@ from linkedin_agent.core.limits import (
     account_age_days,
     effective_cap,
     governor_state,
+    held_at_floor,
     ramp_multiplier,
     ramp_week,
     remaining,
@@ -48,6 +49,17 @@ def test_effective_cap_governor_only_touches_invites():
     assert effective_cap(Action.INMAIL, 30, GovernorState.PAUSED) == (0, 0)
     assert effective_cap(Action.MESSAGE, 30, GovernorState.PAUSED) == (30, None)  # pro ceiling
     assert effective_cap(Action.VISIT, 30, GovernorState.HALVED) == (60, None)
+
+
+def test_governor_floor_limits_how_far_the_verdict_can_cut():
+    P, H, N = GovernorState.PAUSED, GovernorState.HALVED, GovernorState.NORMAL
+    assert held_at_floor(P, P) == P and held_at_floor(H, P) == H
+    assert held_at_floor(P, H) == H and held_at_floor(H, H) == H and held_at_floor(N, H) == N
+    assert held_at_floor(P, N) == N and held_at_floor(H, N) == N
+    assert effective_cap(Action.CONNECT, 30, P, governor_floor=H) == (10, 45)
+    assert effective_cap(Action.INMAIL, 30, P, governor_floor=H)[0] == 10
+    assert effective_cap(Action.CONNECT, 30, P, governor_floor=N) == (20, 90)
+    assert effective_cap(Action.CONNECT, 30, P) == (0, 0)
 
 
 def test_effective_cap_never_below_one_when_not_paused():

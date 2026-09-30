@@ -7,9 +7,9 @@ import statistics
 from datetime import datetime, timedelta
 from typing import Any
 
-from .core.limits import account_age_days, ramp_week
+from .core.limits import account_age_days, held_at_floor, ramp_week
 from .core.runner import Deps, caps_for, usage
-from .models import Action, LeadRecord, LeadSequence, LeadStage, Task
+from .models import Action, GovernorState, LeadRecord, LeadSequence, LeadStage, Task
 
 USAGE_ACTIONS: tuple[Action, ...] = (
     Action.VISIT,
@@ -44,6 +44,7 @@ async def account_health(deps: Deps, account: str, now: datetime) -> dict[str, A
         login = "not_logged_in"
     tripped = bool(acct.tripped_until and acct.tripped_until > now)
     age = account_age_days(acct.first_action_at, now, deps.settings.ramp_offset_days)
+    held = held_at_floor(acct.governor_state, GovernorState(deps.settings.governor_floor))
     return {
         "account": account,
         "login": login,
@@ -54,6 +55,8 @@ async def account_health(deps: Deps, account: str, now: datetime) -> dict[str, A
         "trip_reason": acct.trip_reason if tripped else None,
         "consecutive_failures": acct.consecutive_failures,
         "governor": acct.governor_state.value,
+        # Set when the verdict is stricter than the governor_floor setting lets it act on.
+        "governor_held_at": held.value if held != acct.governor_state else None,
         "ramp_week": ramp_week(age),
         "account_age_days": age,
         "models": models_in_use(deps.settings),
