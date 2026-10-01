@@ -16,6 +16,13 @@ from ..prompts import (
 # for the overlay's compose icon, typing the person's name into a "New message" search
 # and facing eight strangers with the same name. The Sales Navigator lead page opens a
 # centred dialog with Subject, body and Send and nothing else to mistake it for.
+#
+# Why the checks before Send: on the first day of the long design-partner InMail, 9 sent
+# and 8 failed with "send_button_not_found". The screenshots show the body typed and
+# Send grey: the dialog had scrolled past the Subject field, the character counter was
+# red, a "Personalize your message" tip covered the bottom of the dialog, and once the
+# dialog opened on an earlier thread under a Salesforce "Is this the right CRM match?"
+# card with the New InMail fields left empty. Send was there each time; it was disabled.
 
 
 def build_prompt(profile_url: str, params: dict[str, Any]) -> str:
@@ -42,27 +49,40 @@ def build_prompt(profile_url: str, params: dict[str, Any]) -> str:
 2. If the page shows a login form or checkpoint, return {{"status": "failed", "error": "login_required"}}.
    {MISSING_PROFILE_RULE}
 {reach}
-5. On the Sales Navigator lead page, click "Message". A compose dialog opens in the
-   middle of the page with a Subject field, a message body and a Send button. It may
-   mention how many InMail credits you have; that is normal.
-6. If an existing conversation is shown instead, note the first 100 characters of the most
+5. On the Sales Navigator lead page, click "Message". A compose dialog opens with a
+   Subject field, a message body and a Send button. It may be titled "New message" with
+   this person's name already shown at its top, and may say "Use 1 of N credits"; both
+   are normal. If a dark "Personalize your message" tip or any other tip box appears,
+   close it with its X. Ignore Salesforce/CRM panels ("Is this the right CRM match?",
+   "Connect", "Log this conversation to CRM", "Contact not in CRM"): never click them.
+6. If an earlier conversation is shown instead, note the first 100 characters of the most
    recent message written by THEM (you will return it as "prior_reply_text"; empty if none).
+   The fields for a new InMail are then at the bottom, under "New InMail"; expand that
+   section if it is collapsed and use its Subject and message fields.
 7. Click the Subject field and type exactly: {subject}
 8. Click the message body field to focus it and wait 1 second.
 9. Type the message below EXACTLY (do not alter it, make sure the first character is not
    duplicated):
 {message}
-10. Check that the text is visible inside the body field; if it is empty, click into it
-    and type the message once more.
-11. Find the "Send" button directly below the body field, at the bottom of the compose
-    dialog. It becomes active once the field has text. Scroll the dialog if needed.
+10. Check before sending. Scroll the dialog up to its top, then down to its bottom:
+    - The Subject field shows the subject from step 7. If it is empty, click it and
+      type the subject again.
+    - The body holds the message exactly once. If it is empty, click into it and type the
+      message. If the message appears twice, or the character counter near the bottom
+      right (e.g. "1,121/1,900") is red, click into the body, select all of it (Ctrl+A),
+      press Delete, and type the message once.
+11. Find the "Send" button below the body field, at the bottom-right of the dialog. It
+    turns from grey to blue once both Subject and body are filled and the counter is under
+    the limit. If it is still grey after step 10, return
+    {{"status": "failed", "error": "send_disabled: <what is wrong, e.g. subject empty, counter red at 2,240/1,900, other: ...>"}}.
 12. Click "Send" and return {{"status": "sent", "error": null, "prior_reply_text": "<from step 6>"}}.
 
 Rules:
 - Never open the Messaging page, never click the compose (pencil) icon on the Messaging
   bar, and never search for the person by name: many people share a name and the InMail
-  would go to a stranger. If a window titled "New message" with a name search field ever
-  appears, close it with its X and go back to step 5; never type into it.
+  would go to a stranger. If a window with an empty "To"/name search field ever appears
+  (one where you would have to pick the recipient), close it with its X and go back to
+  step 5; never type into it.
 - If the lead page has no Message button, or says you are out of InMail credits, return
   {{"status": "cannot_message", "error": null}}.
 - Never press Enter to send; only the Send button sends.

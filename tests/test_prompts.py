@@ -215,10 +215,24 @@ def test_inmail_goes_through_sales_navigator_not_the_overlay():
     p = build_prompt(Action.INMAIL, URL, {"subject": "s", "text": "hi"})
     assert "Close any small chat windows" in p
     assert '"View in Sales Navigator"' in p
-    assert "compose dialog opens in the" in p and "middle of the page with a Subject field" in p
+    assert "compose dialog opens with a" in p and "Subject field, a message body" in p
     assert "never click the compose (pencil) icon" in p
-    assert 'window titled "New message" with a name search field' in p
+    assert 'empty "To"/name search field' in p
     assert "close it with its X" in p and "never type into it" in p
+
+
+def test_inmail_checks_subject_and_counter_before_send():
+    """First day of the long design-partner InMail: 9 sent, 8 send_button_not_found. The
+    screenshots: body typed, Send grey, Subject scrolled out of view, the counter red, a
+    "Personalize your message" tip over the dialog, and once a CRM-match card above an
+    empty New InMail section. Send was disabled, not missing."""
+    p = build_prompt(Action.INMAIL, URL, {"subject": "s", "text": "hi"})
+    assert '"Personalize your message" tip' in p and "close it with its X" in p
+    assert "Is this the right CRM match?" in p and "never click them" in p
+    assert 'under "New InMail"' in p
+    assert "Subject field shows the subject" in p
+    assert "appears twice" in p and "counter" in p and "red" in p and "Ctrl+A" in p
+    assert '"send_disabled: ' in p
 
 
 def test_comment_prompt_requires_text_and_uses_post_url():
