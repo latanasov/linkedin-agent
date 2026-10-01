@@ -95,6 +95,22 @@ async def reset_governor(deps: Deps, account: str, now: datetime) -> str:
     return f"Governor reset ({was} → normal); acceptance is measured from {now:%Y-%m-%d %H:%M}."
 
 
+async def reset_breaker(deps: Deps, account: str, now: datetime) -> str:
+    """Lift a tripped breaker and give back the tasks it parked.
+
+    A task claimed while the breaker is tripped is parked until the trip ends. Clearing
+    the trip alone left those tasks waiting out the full 48 hours: seen live, a reset at
+    noon and an empty day, every InMail parked until the day after next."""
+    acct = await deps.accounts.get(account)
+    until = acct.tripped_until
+    acct.tripped_until, acct.trip_reason, acct.consecutive_failures = None, None, 0
+    await deps.accounts.save(acct)
+    released = await deps.queue.release_parked(account, until, now) if until else 0
+    if released:
+        return f"Circuit breaker reset; {released} parked task(s) released."
+    return "Circuit breaker reset."
+
+
 async def tick(deps: Deps, account: str, now: datetime | None = None) -> TickReport:
     now = now or deps.clock()
     report = TickReport()

@@ -84,7 +84,8 @@ The agent trips for 48 hours, and stops scheduling anything, when either happens
   of steps on a long page is retried but not counted; only a reported failure is.
 
 `status` shows the reason. Do nothing on LinkedIn for two days. If you are sure it was
-a false alarm, `linkedin-agent breaker reset`.
+a false alarm, `linkedin-agent breaker reset`; the tasks the trip held back are
+released at once.
 
 ## Session expiry
 

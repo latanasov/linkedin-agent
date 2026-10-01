@@ -153,6 +153,16 @@ class SqliteTaskQueue:
         )
         await self._db.commit()
 
+    async def release_parked(self, account: str, until: datetime, now: datetime) -> int:
+        """Make tasks parked until `until` (a breaker's end) claimable from `now`."""
+        cur = await self._db.execute(
+            """UPDATE tasks SET not_before=?
+               WHERE account=? AND status='queued' AND not_before=?""",
+            (iso(now), account, iso(until)),
+        )
+        await self._db.commit()
+        return cur.rowcount or 0
+
     async def expire_overdue(self, now: datetime) -> int:
         cur = await self._db.execute(
             """UPDATE tasks SET status='skipped', result=?, finished_at=?

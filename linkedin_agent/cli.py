@@ -46,6 +46,7 @@ from .core.prompts import LINKEDIN_URL_RE
 from .core.runner import RECYCLE_EXIT_CODE, RecycleRequested, process_task, run_loop
 from .models import Action, LeadStage, Task
 from .scheduler import (
+    reset_breaker,
     reset_governor,
     resolve_review,
     restart_lead,
@@ -890,10 +891,7 @@ def log(
 @breaker_app.command("reset")
 def breaker_reset(account: str = typer.Option(None)) -> None:
     async def go(app_: App) -> None:
-        acct = await app_.deps.accounts.get(account or app_.settings.account)
-        acct.tripped_until, acct.trip_reason, acct.consecutive_failures = None, None, 0
-        await app_.deps.accounts.save(acct)
-        _echo("Circuit breaker reset.")
+        _echo(await reset_breaker(app_.deps, account or app_.settings.account, _now()))
 
     _run(_with_app(go, need_llm=False))
 

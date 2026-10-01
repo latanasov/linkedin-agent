@@ -20,7 +20,14 @@ from pydantic import BaseModel
 from .. import __version__, reporting
 from ..bootstrap import App
 from ..models import LeadStage, parse_duration
-from ..scheduler import reset_governor, resolve_review, restart_lead, retry_lead, skip_lead_step
+from ..scheduler import (
+    reset_breaker,
+    reset_governor,
+    resolve_review,
+    restart_lead,
+    retry_lead,
+    skip_lead_step,
+)
 
 STATIC_DIR = Path(__file__).parent / "static"
 DEFAULT_HOST = "127.0.0.1"
@@ -181,10 +188,7 @@ def create_ui_app(app: App, now: Any = None) -> FastAPI:
 
     @api.post("/api/breaker/reset")
     async def breaker_reset() -> dict[str, str]:
-        acct = await deps.accounts.get(account)
-        acct.tripped_until, acct.trip_reason, acct.consecutive_failures = None, None, 0
-        await deps.accounts.save(acct)
-        return {"message": "Circuit breaker reset."}
+        return {"message": await reset_breaker(deps, account, clock())}
 
     @api.post("/api/governor/reset")
     async def governor_reset() -> dict[str, str]:

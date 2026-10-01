@@ -238,6 +238,25 @@ async def test_breaker_tripped_parks_task(deps, executor):
     assert out.parked_until == NOW + timedelta(hours=10) and executor.calls == []
 
 
+async def test_breaker_reset_releases_the_tasks_it_parked(deps, executor):
+    """Seen live: a reset at noon and an empty day, every InMail parked until the day
+    after next because clearing the trip left the parked tasks' not_before alone."""
+    from linkedin_agent.scheduler import reset_breaker
+
+    lead, _ = await seed(deps)
+    acct = await deps.accounts.get("default")
+    acct.tripped_until, acct.trip_reason = NOW + timedelta(hours=48), "test"
+    await deps.accounts.save(acct)
+    t = await enqueue_step(deps, lead, "warm.visit")
+    assert (await process_task(t, deps)).parked_until == NOW + timedelta(hours=48)
+    assert await deps.queue.claim_next("default", NOW + timedelta(minutes=1)) is None
+    msg = await reset_breaker(deps, "default", NOW + timedelta(minutes=1))
+    assert msg == "Circuit breaker reset; 1 parked task(s) released."
+    claimed = await deps.queue.claim_next("default", NOW + timedelta(minutes=1))
+    assert claimed is not None and claimed.id == t.id
+    assert await reset_breaker(deps, "default", NOW) == "Circuit breaker reset."
+
+
 async def test_paused_lead_is_skipped(deps, executor):
     lead, _ = await seed(deps, stage=LeadStage.PAUSED)
     t = await enqueue_step(deps, lead, "warm.visit")
