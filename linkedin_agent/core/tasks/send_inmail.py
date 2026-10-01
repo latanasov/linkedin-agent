@@ -26,7 +26,10 @@ from ..prompts import (
 # The next day the same leads (Keith, Heidi) failed again while others went out: Sales
 # Navigator keeps an unsent InMail as a draft, so each retry typed the message after the
 # one left from the last attempt, the counter went past 1,900 and Send stayed grey. The
-# fields are now emptied before typing.
+# fields are now emptied before typing. Paul's failure was another shape: an Open Profile,
+# whose own Message button opened a window already addressed to him ("Free message"),
+# Subject and body filled, and a round blue paper-plane icon where the model looked for
+# a button labelled "Send".
 
 
 def build_prompt(profile_url: str, params: dict[str, Any]) -> str:
@@ -59,6 +62,9 @@ def build_prompt(profile_url: str, params: dict[str, Any]) -> str:
    are normal. If a dark "Personalize your message" tip or any other tip box appears,
    close it with its X. Ignore Salesforce/CRM panels ("Is this the right CRM match?",
    "Connect", "Log this conversation to CRM", "Contact not in CRM"): never click them.
+   If the person has an Open Profile, their own "Message" button may instead open a
+   window already addressed to them (their name at its top, "Free message" under it).
+   That is fine: use its Subject and message fields the same way.
 6. If an earlier conversation is shown instead, note the first 100 characters of the most
    recent message written by THEM (you will return it as "prior_reply_text"; empty if none).
    The fields for a new InMail are then at the bottom, under "New InMail"; expand that
@@ -79,8 +85,9 @@ def build_prompt(profile_url: str, params: dict[str, Any]) -> str:
       right (e.g. "1,121/1,900") is red, click into the body, select all of it (Ctrl+A),
       press Delete, and type the message once.
 11. Find the "Send" button below the body field, at the bottom-right of the dialog. It
-    turns from grey to blue once both Subject and body are filled and the counter is under
-    the limit. If it is still grey after step 10, return
+    may be a button labelled "Send" or a round blue paper-plane icon with no text; both
+    are the Send button. It turns from grey to blue once both Subject and body are filled
+    and the counter is under the limit. If it is still grey after step 10, return
     {{"status": "failed", "error": "send_disabled: <what is wrong, e.g. subject empty, counter red at 2,240/1,900, other: ...>"}}.
 12. Click "Send" and return {{"status": "sent", "error": null, "prior_reply_text": "<from step 6>"}}.
 

@@ -235,6 +235,17 @@ def test_inmail_checks_subject_and_counter_before_send():
     assert '"send_disabled: ' in p
 
 
+def test_send_may_be_a_paper_plane_icon():
+    """An Open Profile's own Message button opened a "Free message" window, Subject and
+    body filled, with a round paper-plane icon where the model looked for "Send"."""
+    for action, params in (
+        (Action.MESSAGE, {"text": "hi"}),
+        (Action.INMAIL, {"subject": "s", "text": "hi"}),
+    ):
+        assert "paper-plane icon" in build_prompt(action, URL, params)
+    assert '"Free message"' in build_prompt(Action.INMAIL, URL, {"subject": "s", "text": "hi"})
+
+
 def test_inmail_empties_a_leftover_draft_before_typing():
     """Sales Navigator keeps an unsent InMail as a draft. Keith and Heidi failed on two
     days running while others went out: each retry typed after the last attempt's draft,

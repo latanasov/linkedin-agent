@@ -38,8 +38,9 @@ def build_prompt(profile_url: str, params: dict[str, Any]) -> str:
 8. Check that the text is now visible inside the compose field. If the field is still
    empty, click into it and type the message once more.
 9. Find the "Send" button. It is directly BELOW the compose field, at the bottom-right of
-   the conversation panel, next to the emoji/attachment icons. It turns from grey to blue
-   once the field has text. If it is not visible, scroll the conversation panel to the
+   the conversation panel, next to the emoji/attachment icons. It may be a button
+   labelled "Send" or a round blue paper-plane icon with no text; both are the Send
+   button. It turns from grey to blue once the field has text. If it is not visible, scroll the conversation panel to the
    bottom or expand the panel; do not look in the profile header for it.
 10. Click "Send".
 11. When the message appears in the conversation thread above the compose field, return
