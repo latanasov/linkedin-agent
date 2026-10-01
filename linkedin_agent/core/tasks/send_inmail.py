@@ -23,6 +23,10 @@ from ..prompts import (
 # red, a "Personalize your message" tip covered the bottom of the dialog, and once the
 # dialog opened on an earlier thread under a Salesforce "Is this the right CRM match?"
 # card with the New InMail fields left empty. Send was there each time; it was disabled.
+# The next day the same leads (Keith, Heidi) failed again while others went out: Sales
+# Navigator keeps an unsent InMail as a draft, so each retry typed the message after the
+# one left from the last attempt, the counter went past 1,900 and Send stayed grey. The
+# fields are now emptied before typing.
 
 
 def build_prompt(profile_url: str, params: dict[str, Any]) -> str:
@@ -59,8 +63,11 @@ def build_prompt(profile_url: str, params: dict[str, Any]) -> str:
    recent message written by THEM (you will return it as "prior_reply_text"; empty if none).
    The fields for a new InMail are then at the bottom, under "New InMail"; expand that
    section if it is collapsed and use its Subject and message fields.
-7. Click the Subject field and type exactly: {subject}
-8. Click the message body field to focus it and wait 1 second.
+7. Click the Subject field, select everything in it (Ctrl+A) and press Delete, then type
+   exactly: {subject}
+8. Click the message body field, select everything in it (Ctrl+A) and press Delete so it
+   is empty. Sales Navigator keeps an unsent draft from an earlier attempt, and it must not
+   stay in front of the message. Wait 1 second.
 9. Type the message below EXACTLY (do not alter it, make sure the first character is not
    duplicated):
 {message}

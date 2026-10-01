@@ -235,6 +235,17 @@ def test_inmail_checks_subject_and_counter_before_send():
     assert '"send_disabled: ' in p
 
 
+def test_inmail_empties_a_leftover_draft_before_typing():
+    """Sales Navigator keeps an unsent InMail as a draft. Keith and Heidi failed on two
+    days running while others went out: each retry typed after the last attempt's draft,
+    the counter passed 1,900 and Send stayed grey."""
+    p = build_prompt(Action.INMAIL, URL, {"subject": "s", "text": "hi"})
+    body = p[p.index("8. Click the message body field") : p.index("9. Type the message")]
+    assert "Ctrl+A" in body and "Delete" in body and "draft" in body
+    subject = p[p.index("7. Click the Subject field") : p.index("8. Click the message body")]
+    assert "Ctrl+A" in subject and "Delete" in subject
+
+
 def test_comment_prompt_requires_text_and_uses_post_url():
     with pytest.raises(ValueError):
         build_prompt(Action.COMMENT_POST, URL, {})
