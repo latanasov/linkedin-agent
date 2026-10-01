@@ -26,7 +26,10 @@ from ..prompts import (
 # The next day the same leads (Keith, Heidi) failed again while others went out: Sales
 # Navigator keeps an unsent InMail as a draft, so each retry typed the message after the
 # one left from the last attempt, the counter went past 1,900 and Send stayed grey. The
-# fields are now emptied before typing. Paul's failure was another shape: an Open Profile,
+# fields are now emptied before typing. Jill's screenshot then showed the body typed once,
+# the counter at "1,114 / 1,900" (shown in red at any length) and Send grey: the Subject,
+# scrolled out of view above the body, was empty. The Subject is now typed after the body,
+# by scrolling up to it, and the counter is read by its numbers, not its colour. Paul's failure was another shape: an Open Profile,
 # whose own Message button opened a window already addressed to him ("Free message"),
 # Subject and body filled, and a round blue paper-plane icon where the model looked for
 # a button labelled "Send".
@@ -69,26 +72,30 @@ def build_prompt(profile_url: str, params: dict[str, Any]) -> str:
    recent message written by THEM (you will return it as "prior_reply_text"; empty if none).
    The fields for a new InMail are then at the bottom, under "New InMail"; expand that
    section if it is collapsed and use its Subject and message fields.
-7. Click the Subject field, select everything in it (Ctrl+A) and press Delete, then type
-   exactly: {subject}
-8. Click the message body field, select everything in it (Ctrl+A) and press Delete so it
+7. Click the message body field, select everything in it (Ctrl+A) and press Delete so it
    is empty. Sales Navigator keeps an unsent draft from an earlier attempt, and it must not
    stay in front of the message. Wait 1 second.
-9. Type the message below EXACTLY (do not alter it, make sure the first character is not
+8. Type the message below EXACTLY (do not alter it, make sure the first character is not
    duplicated):
 {message}
-10. Check before sending. Scroll the dialog up to its top, then down to its bottom:
-    - The Subject field shows the subject from step 7. If it is empty, click it and
-      type the subject again.
+9. Now the Subject. It is a separate single-line field ABOVE the message body, with the
+   placeholder "Subject (required)"; once the body is long the dialog scrolls it out of
+   view. Scroll the dialog up until you can see it, click it, select everything in it
+   (Ctrl+A), press Delete, and type exactly: {subject}
+10. Check before sending:
+    - The Subject field holds the subject from step 9. An empty Subject is the usual
+      reason Send stays grey.
     - The body holds the message exactly once. If it is empty, click into it and type the
-      message. If the message appears twice, or the character counter near the bottom
-      right (e.g. "1,121/1,900") is red, click into the body, select all of it (Ctrl+A),
-      press Delete, and type the message once.
+      message. If the message appears twice, click into the body, select all of it
+      (Ctrl+A), press Delete, and type the message once.
+    - The character counter under the body (e.g. "1,114 / 1,900") can be red or orange at
+      any length; the colour means nothing. The message is too long only if the first
+      number is larger than the second.
 11. Find the "Send" button below the body field, at the bottom-right of the dialog. It
     may be a button labelled "Send" or a round blue paper-plane icon with no text; both
-    are the Send button. It turns from grey to blue once both Subject and body are filled
-    and the counter is under the limit. If it is still grey after step 10, return
-    {{"status": "failed", "error": "send_disabled: <what is wrong, e.g. subject empty, counter red at 2,240/1,900, other: ...>"}}.
+    are the Send button. It turns from grey to blue once both Subject and body are filled.
+    If it is still grey after step 10, return
+    {{"status": "failed", "error": "send_disabled: <what is wrong, e.g. subject empty, counter at 2,240 / 1,900, other: ...>"}}.
 12. Click "Send" and return {{"status": "sent", "error": null, "prior_reply_text": "<from step 6>"}}.
 
 Rules:

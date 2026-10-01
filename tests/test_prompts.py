@@ -230,8 +230,8 @@ def test_inmail_checks_subject_and_counter_before_send():
     assert '"Personalize your message" tip' in p and "close it with its X" in p
     assert "Is this the right CRM match?" in p and "never click them" in p
     assert 'under "New InMail"' in p
-    assert "Subject field shows the subject" in p
-    assert "appears twice" in p and "counter" in p and "red" in p and "Ctrl+A" in p
+    assert "Subject field holds the subject" in p
+    assert "appears twice" in p and "Ctrl+A" in p
     assert '"send_disabled: ' in p
 
 
@@ -251,10 +251,19 @@ def test_inmail_empties_a_leftover_draft_before_typing():
     days running while others went out: each retry typed after the last attempt's draft,
     the counter passed 1,900 and Send stayed grey."""
     p = build_prompt(Action.INMAIL, URL, {"subject": "s", "text": "hi"})
-    body = p[p.index("8. Click the message body field") : p.index("9. Type the message")]
+    body = p[p.index("7. Click the message body field") : p.index("8. Type the message")]
     assert "Ctrl+A" in body and "Delete" in body and "draft" in body
-    subject = p[p.index("7. Click the Subject field") : p.index("8. Click the message body")]
+    subject = p[p.index("9. Now the Subject") : p.index("10. Check before sending")]
     assert "Ctrl+A" in subject and "Delete" in subject
+
+
+def test_inmail_types_the_subject_last_and_reads_the_counter_by_number():
+    """Jill: body typed once, counter "1,114 / 1,900" in red, Send grey. The counter is red
+    at any length; the Subject, scrolled out of view above the body, was empty."""
+    p = build_prompt(Action.INMAIL, URL, {"subject": "Design partner", "text": "Hi Jill"})
+    assert p.index("Hi Jill") < p.index("type exactly: Design partner")
+    assert '"Subject (required)"' in p and "Scroll the dialog up" in p
+    assert "the colour means nothing" in p and "first\n      number is larger" in p
 
 
 def test_comment_prompt_requires_text_and_uses_post_url():
