@@ -213,7 +213,7 @@ def test_inmail_goes_through_sales_navigator_not_the_overlay():
     tasks left open; the model gave up on it, clicked the overlay's compose icon, typed
     the person's name into a "New message" search and faced eight strangers."""
     p = build_prompt(Action.INMAIL, URL, {"subject": "s", "text": "hi"})
-    assert "Close any small chat windows" in p
+    assert "you may close" in p and "never stop or fail because of it" in p
     assert '"View in Sales Navigator"' in p
     assert "compose dialog opens with a" in p and "Subject field, a message body" in p
     assert "never click the compose (pencil) icon" in p

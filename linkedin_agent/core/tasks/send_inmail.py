@@ -33,6 +33,9 @@ from ..prompts import (
 # whose own Message button opened a window already addressed to him ("Free message"),
 # Subject and body filled, and a round blue paper-plane icon where the model looked for
 # a button labelled "Send".
+# Overnight on 2 Oct three InMails in a row ended "unable to close the messaging overlay":
+# the model took the Messaging panel, which has no X, for a chat window it had to close
+# first, and gave up. Closing chat windows is now optional and never a reason to stop.
 
 
 def build_prompt(profile_url: str, params: dict[str, Any]) -> str:
@@ -47,8 +50,11 @@ def build_prompt(profile_url: str, params: dict[str, Any]) -> str:
     if on_sales_nav:
         reach = """3. You are already on the person's Sales Navigator lead page."""
     else:
-        reach = """3. Close any small chat windows open at the bottom-right of the page (each has an X in
-   its header) so nothing is in the way. Do not open the Messaging bar itself.
+        reach = """3. If small chat windows for other people are open at the bottom-right, you may close
+   them with the X in their header; this is optional. The "Messaging" panel itself has no
+   X and cannot be closed: leave it as it is (at most collapse it with its arrow), do not
+   click anything inside it, and never stop or fail because of it. If a window will not
+   close after one try, ignore it and go on to step 4.
 4. Get to this person's Sales Navigator lead page: open the "More" menu (the "..." button
    in the profile header, next to the Message button) and click "View in Sales Navigator".
    If it opens in a new tab, continue there. If the menu has no such entry, click
