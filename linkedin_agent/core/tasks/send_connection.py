@@ -9,6 +9,12 @@ from ..prompts import (
     validate_linkedin_url,
 )
 
+# Seen live on 5 Oct: three invites in a row ended in prose ("the 'Connect' button within
+# the dropdown menu could not be reliably clicked"), an unparseable result each, and the
+# breaker stopped everything for two days. The More menu animates in like the invite
+# dialog, so the element indexes read before it are stale; and a failure must still come
+# back as JSON.
+
 
 def build_prompt(profile_url: str, params: dict[str, Any]) -> str:
     profile_url = validate_linkedin_url(profile_url)
@@ -53,6 +59,11 @@ def build_prompt(profile_url: str, params: dict[str, Any]) -> str:
      Connect does NOT mean you are connected; a "2nd" or "3rd" badge means you are not.
    - None of these anywhere (for example a profile that only offers "Follow"):
      return {{"status": "cannot_connect", "error": null}}.
+   The "More" menu animates open like a dialog: after clicking "More", wait 1 second and
+   look at the page again before clicking anything inside it. If the menu has closed or
+   "Connect" in it will not take the click, close the menu (Escape), open "More" once
+   more, look again, and click "Connect". If that second try fails too, return
+   {{"status": "failed", "error": "connect_menu_unclickable"}}; never answer in prose.
 {note_steps}
 9. If LinkedIn shows a message about reaching a limit, restrictions or unusual activity,
    return {{"status": "failed", "error": "restricted"}}.

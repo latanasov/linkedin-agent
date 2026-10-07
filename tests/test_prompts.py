@@ -472,3 +472,12 @@ def test_withdraw_looks_in_the_more_menu_before_giving_up():
     p = build_prompt(Action.WITHDRAW_INVITE, URL, {})
     assert '"More" menu' in p and "neither the header nor" in p
     assert "never answer it" in p
+
+
+def test_connect_rereads_the_more_menu_and_fails_in_json():
+    """5 Oct: three invites ended in prose after the More menu's Connect would not take a
+    click; each was an unparseable result and the breaker stopped everything for 2 days."""
+    p = build_prompt(Action.CONNECT, URL, {"note": "Hi"})
+    assert 'after clicking "More", wait 1 second' in p
+    assert 'open "More" once\n   more' in p
+    assert '"error": "connect_menu_unclickable"' in p and "never answer in prose" in p
