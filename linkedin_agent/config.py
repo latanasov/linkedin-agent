@@ -51,6 +51,12 @@ class Settings(BaseSettings):
     # list, and the account's standing with LinkedIn, on a note that is not landing: the
     # user's call to make explicitly, never a default.
     governor_floor: Literal["paused", "halved", "normal"] = "paused"
+    # How long three ordinary failures in a row pause the agent. A LinkedIn restriction
+    # signal ("unusual activity", "temporarily limited") always pauses for 48 hours; three
+    # plain failures were, in the first weeks live, always a page the model misread (four
+    # 48-hour pauses in one week, five working days lost, no LinkedIn warning among them).
+    # A real problem trips again after each pause and stays visible in `status`.
+    failure_pause_hours: int = Field(default=2, ge=1, le=48)
     daily_visit_limit: int | None = None
     daily_connect_limit: int | None = None
     daily_message_limit: int | None = None

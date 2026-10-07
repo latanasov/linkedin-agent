@@ -76,15 +76,18 @@ LinkedIn, on a note that is not landing, so it is a choice to make on purpose.
 
 ## The circuit breaker
 
-The agent trips for 48 hours, and stops scheduling anything, when either happens:
+The agent stops scheduling anything when either happens:
 
 - LinkedIn shows a restriction message: "unusual activity", "temporarily limited",
-  "verify your identity", or the browser gets rate-limited.
-- Three actions in a row fail for ordinary reasons. A browser task that merely ran out
-  of steps on a long page is retried but not counted; only a reported failure is.
+  "verify your identity", or the browser gets rate-limited. It pauses for **48 hours**.
+- Three actions in a row fail for ordinary reasons. It pauses for **2 hours**
+  (`LINKEDIN_AGENT_FAILURE_PAUSE_HOURS`, 1 to 48). These have so far always been a page
+  the model misread, never LinkedIn pushing back; a real problem trips again after each
+  pause. A browser task that merely ran out of steps on a long page is retried but not
+  counted; only a reported failure is.
 
-`status` shows the reason. Do nothing on LinkedIn for two days. If you are sure it was
-a false alarm, `linkedin-agent breaker reset`; the tasks the trip held back are
+`status` shows the reason. After a restriction, do nothing on LinkedIn for two days. If
+you are sure it was a false alarm, `linkedin-agent breaker reset`; the tasks the trip held back are
 released at once.
 
 ## Session expiry

@@ -57,7 +57,7 @@ from .timezone import resolve_tz, schedule_in_window
 
 logger = logging.getLogger(__name__)
 
-BREAKER_HOURS = 48
+BREAKER_HOURS = 48  # a LinkedIn restriction signal
 # Starting Chrome and getting a usable tab: unbounded until a hung browser blocked the
 # loop for hours with no task even claimed. The executor's own budget starts after this.
 BROWSER_START_TIMEOUT_S = 180
@@ -774,7 +774,8 @@ async def _fail(
     elif kind == ErrorKind.OTHER:
         acct.consecutive_failures += 1
         if acct.consecutive_failures >= MAX_CONSECUTIVE_FAILURES:
-            acct.tripped_until = now + timedelta(hours=BREAKER_HOURS)
+            pause_h = deps.settings.failure_pause_hours
+            acct.tripped_until = now + timedelta(hours=pause_h)
             acct.trip_reason = (
                 f"{MAX_CONSECUTIVE_FAILURES} consecutive failures: {result.error or result.status}"[
                     :200
@@ -782,8 +783,7 @@ async def _fail(
             )
             acct.consecutive_failures = 0
             note = (
-                f"circuit breaker tripped for {BREAKER_HOURS}h "
-                f"after {MAX_CONSECUTIVE_FAILURES} failures"
+                f"circuit breaker tripped for {pause_h}h after {MAX_CONSECUTIVE_FAILURES} failures"
             )
     # crash: infra, not LinkedIn — no breaker, no counter
     if result.data.get("screenshot"):

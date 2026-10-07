@@ -99,10 +99,11 @@ more. Below 20% invites pause until the rate recovers.
 The agent saw "unusual activity" or similar. Do nothing on LinkedIn for two days, then
 check your account by hand. `breaker reset` only if you are sure it was a false alarm.
 
-**`Circuit breaker tripped for 48h after 3 failures`**
+**`Circuit breaker tripped for 2h after 3 failures`**
 Three actions in a row failed for ordinary reasons, usually a LinkedIn layout the model
-could not read. Look at `log` and the failed tasks on the dashboard. `breaker reset` when
-you have seen what failed.
+could not read. The agent resumes on its own after the pause
+(`LINKEDIN_AGENT_FAILURE_PAUSE_HOURS`). If it keeps tripping, look at `log`, the failed
+tasks on the dashboard and their screenshots under `~/.linkedin-agent/failures/`.
 
 **`failed · other; retry 1/3` with `unknown status '…' from the model`**
 The browser model answered with a status the prompt did not offer. A status that merely

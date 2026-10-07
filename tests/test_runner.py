@@ -327,11 +327,36 @@ async def test_three_plain_failures_trip_breaker_and_stall_sequence(deps, execut
             t = await deps.queue.get(t.id)
             t.status, t.attempts = TaskStatus.RUNNING, attempt + 1
             await deps.queue.update(t)
-    assert out.status == TaskStatus.FAILED
+    assert out.status == TaskStatus.FAILED and "tripped for 2h after 3 failures" in out.note
     acct = await deps.accounts.get("default")
-    assert acct.tripped_until == NOW + timedelta(hours=BREAKER_HOURS)
+    assert acct.tripped_until == NOW + timedelta(hours=deps.settings.failure_pause_hours)
+    assert deps.settings.failure_pause_hours == 2 < BREAKER_HOURS
     assert "3 consecutive failures" in acct.trip_reason
     assert (await deps.leads.get_sequence(lead.id)).next_due_at is None
+
+
+async def test_failure_pause_follows_the_setting_but_restrictions_stay_48h(deps, executor):
+    deps.settings.failure_pause_hours = 6
+    lead, _ = await seed(deps)
+    acct = await deps.accounts.get("default")
+    acct.consecutive_failures = 2
+    await deps.accounts.save(acct)
+    executor.script(Action.VISIT, RuntimeError("element not found"))
+    t = await enqueue_step(deps, lead, "warm.visit")
+    await process_task(t, deps)
+    assert (await deps.accounts.get("default")).tripped_until == NOW + timedelta(hours=6)
+    acct = await deps.accounts.get("default")
+    acct.tripped_until = None
+    await deps.accounts.save(acct)
+    lead2, _ = await seed(
+        deps, step="invite.posts", branch="posts", linkedin_url="https://www.linkedin.com/in/other/"
+    )
+    executor.script(Action.CONNECT, RuntimeError("LinkedIn says: unusual activity detected"))
+    t2 = await enqueue_step(deps, lead2, "invite.posts", note="")
+    await process_task(t2, deps)
+    assert (await deps.accounts.get("default")).tripped_until == NOW + timedelta(
+        hours=BREAKER_HOURS
+    )
 
 
 async def test_success_resets_failure_counter(deps, executor):
