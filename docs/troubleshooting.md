@@ -217,8 +217,24 @@ one behind. Every close now sweeps whatever still holds the profile directory; t
 count should sit in the teens. The Python process also grows over days (1.5 GB after
 thirty hours, seen live): past `LINKEDIN_AGENT_MAX_RSS_MB` (1024) or
 `LINKEDIN_AGENT_MAX_RUN_HOURS` (24) the loop closes the browser between two tasks and
-exits with status 75, which the service unit's `Restart=on-failure` turns into a fresh
-process a minute later. The run log line is `recycling: …`; a task is never cut off.
+exits with status 75 for the service to start a fresh process a minute later. The run
+log line is `recycling: …`; a task is never cut off.
+
+## The agent stopped after `recycling:` and never came back
+
+`status` says `run loop: NOT active` and the service is `inactive`, with `Deactivated
+successfully` as the last journal line. The unit has `SuccessExitStatus=75`, which makes
+the recycle exit count as success, and `Restart=on-failure` then leaves it stopped. Seen
+live: a day lost. Restart it on any exit with a drop-in, which also covers whatever else
+might one day exit cleanly:
+
+```
+sudo mkdir -p /etc/systemd/system/linkedin-agent.service.d
+printf "[Service]\nRestart=always\nRestartSec=60\n" | sudo tee /etc/systemd/system/linkedin-agent.service.d/restart.conf
+sudo systemctl daemon-reload
+```
+
+`systemctl stop linkedin-agent` still stops it for good.
 
 ## InMails fail while messages to connections work
 
